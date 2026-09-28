@@ -24,6 +24,11 @@ event page on affected banks are remapped. Event commands, page conditions and
 other properties remain unchanged. Unchanged maps retain their original bytes.
 Map inventory and unchanged dependency hashes are checked during commit. Changed
 destinations use the transaction's original-hash checks and backups/rollback.
+Map references must be positive integer IDs, MapInfos entries must be canonical,
+and selected-bank properties must use supported ranges: passage 0..255,
+priority 0..5, terrain 0..32767. Custom nested settings are compared by value,
+independently of object-key insertion order. A newly appearing output file aborts
+the transaction rather than overwriting that file.
 
 No scripts run or get analyzed. Runtime-generated references, scripting changes
 to tilesets and external catalogs are unresolved; callers must review these before

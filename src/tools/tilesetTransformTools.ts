@@ -1,6 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { allowed, contained, readLimited, beforeProjectCommit, atomicWriteFile, canvasBudget, checkValue, assertId, expectNewProjectFile } from '../utils/security.js';
 import { readRxdataFile, writeRxdataFile } from '../utils/rxdata.js';
 import { decodePng, encodePng, makeCanvas, resolveGraphic, type Canvas } from '../utils/tiles.js';
@@ -43,13 +44,17 @@ async function transform(project: string, mode: 'compact'|'merge', args: Compact
   for (const [i,t] of records.entries()) {
     const n=t?.passages?.xsize;
     if(t?._class!=='RPG::Tileset'||t.id!==ids[i]||!Number.isInteger(n)||n<384||n>32768) throw new Error('Invalid tileset record');
-    for(const f of fields) if(t[f]?._class!=='Table'||t[f].dim!==1||t[f].xsize!==n||t[f].ysize!==1||t[f].zsize!==1||t[f].data?.length!==n) throw new Error('Invalid property table');
-    if(!Array.isArray(t.autotile_names)||t.autotile_names.length!==7) throw new Error('Exactly seven explicit autotile slots required');
+    for(const f of fields) {
+      if(t[f]?._class!=='Table'||t[f].dim!==1||t[f].xsize!==n||t[f].ysize!==1||t[f].zsize!==1||t[f].data?.length!==n) throw new Error('Invalid property table');
+      const max=f==='passages'?255:f==='priorities'?5:32767;
+      if(!t[f].data.every((v:unknown)=>typeof v==='number'&&Number.isInteger(v)&&v>=0&&v<=max)) throw new Error(`Unsupported ${f} values; expected integers in 0..${max}`);
+    }
+    if(!Array.isArray(t.autotile_names)||t.autotile_names.length!==7||!t.autotile_names.every((v:unknown)=>typeof v==='string')) throw new Error('Exactly seven explicit string autotile slots required');
   }
   const base=records[0];
   if(mode==='merge') for(const t of records.slice(1)) {
     const settings=(v:any)=>Object.fromEntries(Object.keys(v).sort().filter(k=>!['id','name','tileset_name',...fields].includes(k)).map(k=>[k,v[k]]));
-    if(JSON.stringify(settings(t))!==JSON.stringify(settings(base))) throw new Error('Merge conflict: autotile slots or panorama/fog/battleback/custom settings differ');
+    if(!isDeepStrictEqual(settings(t),settings(base))) throw new Error('Merge conflict: autotile slots or panorama/fog/battleback/custom settings differ');
     for(const f of fields) if(JSON.stringify(t[f].data.slice(0,384))!==JSON.stringify(base[f].data.slice(0,384))) throw new Error(`Merge conflict: reserved/autotile ${f} differ`);
   }
   const dataDir=contained(project,join(project,'Data'));
@@ -58,14 +63,17 @@ async function transform(project: string, mode: 'compact'|'merge', args: Compact
   const infoPath=join(dataDir,'MapInfos.rxdata'); await observe(infoPath);
   const infos=await readRxdataFile<any>(infoPath);
   if(!infos||typeof infos!=='object'||Array.isArray(infos)) throw new Error('Invalid MapInfos');
-  for(const k of Object.keys(infos)) { assertId(Number(k)); if(!files.some(f=>f.toLowerCase()===`map${String(Number(k)).padStart(3,'0')}.rxdata`)) throw new Error(`Missing indexed map ${k}`); }
+  for(const k of Object.keys(infos)) {
+    if(!/^[1-9]\d*$/.test(k)||String(Number(k))!==k||infos[k]?._class!=='RPG::MapInfo') throw new Error('Invalid MapInfos entry');
+    assertId(Number(k)); if(!files.some(f=>f.toLowerCase()===`map${String(Number(k)).padStart(3,'0')}.rxdata`)) throw new Error(`Missing indexed map ${k}`);
+  }
   const maps: {path:string;map:any;id:number}[]=[]; const seen=new Set<number>();
   const used=new Map(ids.map(id=>[id,new Set<number>()]));
   let affectedCells=0;
   for(const file of files) {
     const id=Number(file.match(/\d+/)![0]); assertId(id); if(seen.has(id)) throw new Error('Duplicate map ID'); seen.add(id);
     const path=join(dataDir,file); await observe(path); const map=await readRxdataFile<any>(path);
-    if(map?._class!=='RPG::Map'||!entries[map.tileset_id]) throw new Error(`Invalid map tileset in ${file}`);
+    if(map?._class!=='RPG::Map'||!Number.isInteger(map.tileset_id)||map.tileset_id<1||entries[map.tileset_id]?._class!=='RPG::Tileset'||entries[map.tileset_id]?.id!==map.tileset_id) throw new Error(`Invalid map tileset in ${file}`);
     if(!used.has(map.tileset_id)) continue;
     if(map.data?._class!=='Table'||map.data.xsize!==map.width||map.data.ysize!==map.height||map.data.zsize!==3) throw new Error(`Invalid map layers in ${file}`);
     affectedCells+=map.data.data.length; if(affectedCells>2000000) throw new Error('Affected maps exceed 2 million cells');

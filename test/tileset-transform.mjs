@@ -55,4 +55,26 @@ fs.promises.rename=async(from,to)=>{if(to===db&&!reached){reached=true;throw Obj
 try {await assert.rejects(run(true,()=>mergeTilesets(root,{...rollbackArgs,dryRun:false,reviewedPlanHash:rp.planHash,acknowledgeDynamicReferences:true})),/Synthetic commit failure/);} finally {fs.promises.rename=rename;syncBuiltinESMExports();}
 assert.ok(reached);assert.deepEqual(await readFile(db),originalDB);assert.deepEqual(await readFile(mp(2)),original2);await assert.rejects(access(join(root,'Graphics','Tilesets','rollback.png')));
 console.log('PASS injected late rename failure rolls back changed map and newly created PNG');
+// A string reference previously bypassed the numeric Set and hid a referencing map.
+const malformedMap=await readRxdataFile(mp(1));malformedMap.tileset_id='1';await writeRxdataFile(mp(1),malformedMap);
+await assert.rejects(run(false,()=>compactUsedTileset(root,{...compact,outputName:'malformed'})),/Invalid map tileset/);await writeFile(mp(1),original1);
+for(const [field,value] of [['passages',256],['priorities',6],['terrain_tags',-1]]) {const invalid=structuredClone(records);invalid[1][field].data[390]=value;await writeRxdataFile(db,invalid);await assert.rejects(run(false,()=>compactUsedTileset(root,{...compact,outputName:'malformed'})),/Unsupported/);}
+await writeFile(db,originalDB);
+const infoPath=join(root,'Data','MapInfos.rxdata'),originalInfos=await readFile(infoPath);
+await writeRxdataFile(infoPath,{'1':null});await assert.rejects(run(false,()=>planTilesetMerge(root,{...merge,outputName:'malformed'})),/Invalid MapInfos/);await writeFile(infoPath,originalInfos);
+const nested=structuredClone(records);nested[1].custom={a:1,b:{x:2,y:3}};nested[2].custom={b:{y:3,x:2},a:1};await writeRxdataFile(db,nested);
+await run(false,()=>planTilesetMerge(root,{...merge,outputName:'nested'}));nested[2].custom.b.x=4;await writeRxdataFile(db,nested);
+await assert.rejects(run(false,()=>planTilesetMerge(root,{...merge,outputName:'nested'})),/Merge conflict/);await writeFile(db,originalDB);
+console.log('PASS malformed/string map references, unsupported flags, malformed MapInfos rejected; nested settings compared semantically');
+const raceArgs={...merge,outputName:'race'},racePlan=await run(false,()=>planTilesetMerge(root,raceArgs));const racePath=join(root,'Graphics','Tilesets','race.png');
+await assert.rejects(run(true,async()=>{await mergeTilesets(root,{...raceArgs,dryRun:false,reviewedPlanHash:racePlan.planHash,acknowledgeDynamicReferences:true});await writeFile(racePath,'external sentinel');}),/appeared|exist/i);
+assert.equal(await readFile(racePath,'utf8'),'external sentinel');assert.deepEqual(await readFile(db),originalDB);assert.deepEqual(await readFile(mp(2)),original2);
+const sourcePath=join(root,'Graphics','Tilesets','bank2.png'),sourceBytes=await readFile(sourcePath);
+const staleArgs={...merge,outputName:'stale'},stale=await run(false,()=>planTilesetMerge(root,staleArgs));
+const modified=makeCanvas(256,64);modified.data.fill(128);await writeFile(sourcePath,encodePng(modified));
+await assert.rejects(run(true,()=>mergeTilesets(root,{...staleArgs,dryRun:false,reviewedPlanHash:stale.planHash,acknowledgeDynamicReferences:true})),/reviewedPlanHash/);await writeFile(sourcePath,sourceBytes);
+const commitGuard=await run(false,()=>planTilesetMerge(root,staleArgs));
+await assert.rejects(run(true,async()=>{await mergeTilesets(root,{...staleArgs,dryRun:false,reviewedPlanHash:commitGuard.planHash,acknowledgeDynamicReferences:true});await writeFile(sourcePath,encodePng(modified));}),/dependency changed/);await writeFile(sourcePath,sourceBytes);
+assert.deepEqual(await readFile(db),originalDB);assert.deepEqual(await readFile(mp(2)),original2);
+console.log('PASS new-output race preserves external file; stale source invalidates plan and precommit guard');
 console.log(`Synthetic fixtures: ${root}`);
