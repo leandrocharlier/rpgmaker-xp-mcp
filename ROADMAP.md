@@ -36,3 +36,45 @@ animation sequences or choose active pages at runtime. `classify_asset` offers
 asset heuristics, not a character-sheet compatibility certificate. No dedicated
 frame extraction, animation validation, or character-sheet conversion tool is
 implemented yet.
+
+## Movement boundaries and transfers
+
+- Read-only movement auditing with explicit start cells, allowed/forbidden zones,
+  required destinations, and witness paths for escapes or unexpected access.
+  Positive reachability alone must not establish containment. Include a synthetic
+  room surrounded by empty tile 0: reaching the room's goal can pass while the
+  forbidden exterior remains reachable and must fail the boundary audit.
+- Check event movement routes and transfer source/destination coordinates against
+  explicitly supplied stair footprints and permitted entry/exit directions.
+  Report runtime-dependent event pages, scripts, and movement rules as unknown;
+  keep engine-specific passability adapters separate from standard XP semantics.
+
+`validate_connectivity` currently checks the inter-map transfer graph and bounds,
+not walkable cell containment or stair geometry. The `render_map` passability
+overlay is approximate and is not a movement validator.
+
+## Tileset merging and capacity planning
+
+Extend the compact/remap proposal above with a read-only merge plan that reports
+output height, tile IDs, source-to-target mappings, autotile-slot conflicts,
+property conflicts, and image/Table/transaction budgets before any writes.
+Preserve existing target IDs where possible; conflicting IDs from other banks
+require explicit remapping of all affected map layers and tile-based event pages.
+Preserve passage, priority, and terrain properties and reject unresolved conflicts.
+Test over-budget rejection without writes, exact boundary acceptance, conflicting
+autotile slots, event remapping, unchanged unrelated files, and rollback on fixtures.
+
+Current `compose_tileset_atlas` preserves one base prefix and its existing flags;
+appended pieces receive zero flags and maps are not remapped. `plan_tileset_import`
+plans packing and budgets, not a property-preserving merge. Neither tool certifies
+that a merged atlas will work in a particular game runtime.
+
+The MCP has no fixed 16,384-pixel atlas height ceiling. Its image budget is
+16 * 1024 * 1024 pixels, allowing 65,536 pixels of height at width 256 before
+other budgets apply. It also checks signed tile IDs up to 32,767. These are MCP
+validation limits, not guarantees about editor, runtime, GPU, or preview capacity.
+The [XP material specification](https://www.rpg-maker.fr/dl/monos/aide/xp/source/rpgxp/material.html)
+(a mirror of the XP help) describes eight 32-pixel columns and no fixed tileset
+file-size limit; it does not establish a universal practical rendering limit.
+A future merge plan must accept an explicit tested target-runtime height limit
+and reject excess before writing, rather than infer compatibility from MCP budgets.
