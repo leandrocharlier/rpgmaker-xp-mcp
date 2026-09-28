@@ -4,6 +4,7 @@ import { open, rename, unlink, mkdir, copyFile } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, dirname, join, basename } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { Transform } from 'node:stream';
+import { setTimeout as delay } from 'node:timers/promises';
 import { chargeTable, validatePlainTable } from './tableValidation.js';
 
 export const MAX_FILE = 64 * 1024 * 1024;
@@ -66,6 +67,14 @@ export async function readLimited(path: string): Promise<Buffer> {
   path = allowed(path);
   const state = scope.getStore();
   if (state?.writes.has(path)) return state.writes.get(path)!;
+  const bytes = await readDiskLimited(path);
+  if (state && !state.observed.has(path)) state.observed.set(path, digest(bytes));
+  return bytes;
+}
+
+// Physical reads must bypass staged data when validating a commit or rollback.
+async function readDiskLimited(path: string): Promise<Buffer> {
+  path = allowed(path);
   const handle = await open(path, 'r');
   try {
     const st = await handle.stat();
@@ -80,9 +89,7 @@ export async function readLimited(path: string): Promise<Buffer> {
       if (total > MAX_FILE) throw new Error('File exceeds the 64 MiB limit');
       chunks.push(b.subarray(0, bytesRead));
     }
-    const bytes = Buffer.concat(chunks);
-    if (state && !state.observed.has(path)) state.observed.set(path, digest(bytes));
-    return bytes;
+    return Buffer.concat(chunks);
   } finally { await handle.close(); }
 }
 
@@ -92,14 +99,32 @@ export async function safeMkdir(path: string, _opts?: unknown): Promise<void> {
   allowed(path, true);
 }
 
-async function replace(path: string, bytes: Buffer): Promise<void> {
+async function currentDigest(path: string): Promise<string | null> {
+  try { return digest(await readDiskLimited(path)); }
+  catch (e) { if (missing(e)) return null; throw e; }
+}
+
+async function assertUnchanged(path: string, expected: string | null): Promise<void> {
+  allowed(path, true);
+  if (await currentDigest(path) !== expected) throw new Error(`File changed outside this operation; refusing replacement or rollback: ${path}`);
+}
+
+async function replace(path: string, bytes: Buffer, expected: string | null): Promise<void> {
   allowed(path, true);
   const temp = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
   const handle = await open(temp, 'wx');
   try {
     await handle.writeFile(bytes); await handle.sync(); await handle.close();
-    allowed(path, true);
-    await rename(temp, path);
+    // Retry the same synced temporary file, never the tool or whole transaction.
+    // Four waits (50/100/200/400 ms), only for transient Windows-style busy errors.
+    for (let attempt = 0; ; attempt++) {
+      await assertUnchanged(path, expected);
+      try { await rename(temp, path); break; }
+      catch (e) {
+        if (!['EPERM', 'EBUSY'].includes((e as NodeJS.ErrnoException).code ?? '') || attempt >= 4) throw e;
+        await delay(50 * 2 ** attempt);
+      }
+    }
   } finally {
     await handle.close().catch(() => {});
     await unlink(temp).catch(e => { if (!missing(e)) throw e; });
@@ -126,8 +151,9 @@ export async function atomicWriteFile(path: string, data: string | Uint8Array, e
     if (total > MAX_TRANSACTION) throw new Error('Operation exceeds the 128 MiB write budget');
     state.writes.set(path, bytes);
   } else {
+    const expected = await currentDigest(path);
     await versionedBackup(path);
-    await replace(path, bytes);
+    await replace(path, bytes, expected);
   }
 }
 
@@ -151,11 +177,19 @@ async function commit(state: State): Promise<void> {
   }
   const written: string[] = [];
   try {
-    for (const [path, bytes] of state.writes) { await replace(path, bytes); written.push(path); }
+    for (const [path, bytes] of state.writes) {
+      const old = originals.get(path)!;
+      await replace(path, bytes, old === null ? null : digest(old)); written.push(path);
+    }
   } catch (error) {
     const rollbackErrors: string[] = [];
     for (const path of written.reverse()) {
-      try { const old = originals.get(path); if (old) await replace(path, old); else await unlink(path); }
+      try {
+        const old = originals.get(path);
+        const expected = digest(state.writes.get(path)!);
+        if (old) await replace(path, old, expected);
+        else { await assertUnchanged(path, expected); await unlink(path); }
+      }
       catch { rollbackErrors.push(path); }
     }
     if (rollbackErrors.length) throw new Error(`Write and rollback failed; restore versioned backups for: ${rollbackErrors.join(', ')}`);

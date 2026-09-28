@@ -16,7 +16,15 @@ them outside the MCP dispatcher.
 Writes are staged until the tool succeeds, with a 128 MiB transaction budget.
 Existing files receive unique backups in the adjacent `.mcp-backup` directory.
 A backup failure stops the operation, including subsequent retries. Individual
-files are replaced by a synced temporary file and rename. If replacement of a
+files are replaced by a synced temporary file and rename. Rename retries only
+`EPERM` and `EBUSY`, for at most five attempts using the same temporary file,
+with waits of 50, 100, 200 and 400 ms. The tool itself is never rerun, so retries
+do not append duplicate records or create extra backup versions. Other errors
+fail immediately. The destination's real on-disk hash (or expected absence) is
+checked before every attempt, bypassing staged reads. A change aborts the write.
+Rollback uses the same checks and bounded rename retries; it preserves external
+edits and reports manual recovery instead of overwriting them. Persistent locks
+can still require a later user retry. If replacement of a
 later file fails, earlier replacements are rolled back; failed recovery reports
 which files need restoring. Old backups are not deleted automatically.
 
@@ -72,6 +80,7 @@ node test/catalog-pages-mcp.mjs
 node test/atlas-compose-mcp.mjs
 node test/table-budgets-mcp.mjs
 node test/import-plan-mcp.mjs
+node test/rename-retry.mjs
 node test/essentials-strings.mjs
 node test/tools.mjs
 node test/essentials-mcp.mjs <essentials-project>
