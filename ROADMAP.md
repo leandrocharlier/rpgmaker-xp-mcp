@@ -53,6 +53,21 @@ links resolve to the correct output rows, and partial review is never reported
 as complete coverage. These extend the proposed provenance review; they do not
 describe a defect in the current composition tool or an implemented audit.
 
+Review proposed strip boundaries for cuts through objects before packing. A source
+group or sheet region is not necessarily one object. Warn about suspected cuts
+and require reviewed object bounds; pixel continuity alone is a heuristic, not
+proof of object identity. Extract a complete object before packing when its final
+scaled and padded footprint fits the eight-tile width. Otherwise require an
+explicit reviewed modular split, with provenance and a reassembly preview, rather
+than silently slicing it into distant strips. Pixel preservation alone does not
+establish visual integrity or convenient object placement.
+
+Add a synthetic 64-pixel-wide PC straddling x=256 in a wider source sheet: its
+complete crop must stay together in the output. Pair it with a legitimately wide
+modular wall that may be split at reviewed boundaries with source-to-output links
+and a reconstruction preview. This extends import curation checks, not the
+current composer's contract for explicitly supplied rectangles.
+
 ## Character sheets
 
 - Read-only inspection of explicit XP 4-by-4 character sheets: per-frame and
