@@ -9,8 +9,8 @@ async function loadMap(projectPath: string, mapId: number): Promise<GameMap> {
   return readRxdataFile<GameMap>(getMapPath(projectPath, mapId));
 }
 
-async function saveMap(projectPath: string, mapId: number, map: GameMap): Promise<void> {
-  for (const event of Object.values(map.events ?? {})) {
+async function saveMap(projectPath: string, mapId: number, map: GameMap, changedEvents = Object.values(map.events ?? {})): Promise<void> {
+  for (const event of changedEvents) {
     for (const page of event.pages ?? []) {
       page.list = normalizeCommandList(page.list);
     }
@@ -118,6 +118,10 @@ export async function createMapEvent(
   const map = await loadMap(projectPath, mapId);
   map.events = map.events ?? {};
 
+  if (!Number.isInteger(params.x) || !Number.isInteger(params.y) || params.x < 0 || params.y < 0 || params.x >= map.width || params.y >= map.height) {
+    throw new Error('Event position must be an integer coordinate inside the map');
+  }
+
   const ids = Object.keys(map.events).map(Number);
   const newId = ids.length > 0 ? Math.max(...ids) + 1 : 1;
 
@@ -131,8 +135,34 @@ export async function createMapEvent(
   };
 
   map.events[String(newId)] = event;
-  await saveMap(projectPath, mapId, map);
+  await saveMap(projectPath, mapId, map, [event]);
   return event;
+}
+
+function showTextCommands(text: string): EventCommand[] {
+  const lines = text.split(/\r?\n/);
+  const commands: EventCommand[] = [];
+  for (let i = 0; i < lines.length; i += 4) {
+    commands.push(makeEventCommand(101, 0, [lines[i]]));
+    for (const line of lines.slice(i + 1, i + 4)) commands.push(makeEventCommand(401, 0, [line]));
+  }
+  return commands;
+}
+
+/** The MCP dispatcher stages the map and System revision in one transaction. */
+export async function createNpc(
+  projectPath: string, mapId: number,
+  params: { name: string; x: number; y: number; characterName: string; messages: string[] },
+): Promise<MapEvent> {
+  if (typeof params.characterName !== 'string' || !params.characterName.trim() ||
+      !Array.isArray(params.messages) || !params.messages.length || params.messages.length > 1000 ||
+      params.messages.some(text => typeof text !== 'string' || text.length > 16384)) {
+    throw new Error('NPC requires a character name and 1..1000 messages of at most 16384 characters');
+  }
+  const page = makeEventPage();
+  page.graphic.character_name = params.characterName;
+  page.list = [...params.messages.flatMap(showTextCommands), makeEventCommand()];
+  return createMapEvent(projectPath, mapId, { name: params.name, x: params.x, y: params.y, pages: [page] });
 }
 
 /**
@@ -205,14 +235,7 @@ export async function addShowText(
     throw new Error(`Page ${pageIndex} not found on event ${eventId}`);
   }
 
-  const lines = text.split(/\r?\n/);
-  const commands: EventCommand[] = [];
-  for (let i = 0; i < lines.length; i += 4) {
-    commands.push(makeEventCommand(101, 0, [lines[i]]));
-    for (const line of lines.slice(i + 1, i + 4)) {
-      commands.push(makeEventCommand(401, 0, [line]));
-    }
-  }
+  const commands = showTextCommands(text);
 
   const maxPos = Math.max(0, page.list.length - 1);
   const insertAt = position !== undefined ? Math.min(position, maxPos) : maxPos;

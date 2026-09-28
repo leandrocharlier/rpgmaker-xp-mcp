@@ -24,10 +24,13 @@ opens the result normally.
 
 ## ⚠️ Read this before your first run
 
-**1. Close the RPG Maker XP editor while the server is running.**
+**1. Close the project in RPG Maker XP before external writes.**
 The editor holds all data files in memory and rewrites every one of them when
-you save. If it is open, it will overwrite anything this server changed. This
-is the single most common way to lose work.
+you save. If the project is still loaded, saving can overwrite server changes. This
+is the single most common way to lose work. Save your own changes first, use
+**File > Close Project**, then reopen `Game.rxproj` with **File > Open Project
+(Ctrl+O)** after the MCP finishes. The application can remain open. Do not save
+a stale project after external edits or automatically discard unsaved work.
 
 **2. Back up your project first.** Copy the whole `Data/` folder somewhere
 safe. Do this even though the server takes its own backups, because:
@@ -234,11 +237,15 @@ Scope: 0=none, 1=one enemy, 2=all enemies, 3=one ally, 4=all allies,
 <summary><b>Maps & events</b></summary>
 
 `get_map` · `get_map_infos` · `get_map_events` · `get_map_event` ·
-`update_map_event` · `create_map_event` · `create_transfer_event` ·
+`update_map_event` · `create_map_event` · `create_npc` · `create_transfer_event` ·
 `search_map_events` · `add_event_command` · `add_show_text`
 
 Maps live in `Data/MapXXX.rxdata`. `get_map` summarises the tile Table unless
 `includeTiles: true`. Events are a hash keyed by event ID.
+
+`create_npc` creates a stationary action-button NPC with a sprite and messages
+in one transaction. `create_map_event.pages` accepts complete RGSS page objects;
+omit it for an empty default page. See [NPC examples](EXAMPLES.md#a-new-npc).
 
 `add_show_text` handles XP's message structure (first line = code 101,
 continuations = 401, 4 lines per box). XP specifics: code 101 carries text

@@ -14,6 +14,7 @@ import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv
 import { checkValue, runProjectOperation, hardenSchema, boundedStdioInput } from './utils/security.js';
 
 import { validateProjectPath } from './utils/fileHandler.js';
+import { eventPageSchema } from './utils/eventSchemas.js';
 import * as actorTools from './tools/actorTools.js';
 import * as itemTools from './tools/itemTools.js';
 import * as mapTools from './tools/mapTools.js';
@@ -512,9 +513,25 @@ class RPGMakerXPServer {
             name: { type: 'string' },
             x: { type: 'number' },
             y: { type: 'number' },
-            pages: { type: 'array', description: 'Optional RPG::Event::Page objects' },
+            pages: { type: 'array', items: eventPageSchema, description: 'Optional complete RPG::Event::Page objects, including condition, graphic, move_route and list. Omit for an empty default page; use create_npc for sprite and dialogue defaults.' },
           },
           required: ['mapId', 'name', 'x', 'y'],
+        },
+      },
+      {
+        name: 'create_npc',
+        description: 'Create a stationary NPC with a character sprite and Show Text dialogue in one transaction. Uses action-button trigger and RGSS defaults. Each messages entry starts a new box; multiline entries split into boxes of up to four lines. Does not insert or execute Ruby.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            mapId: { type: 'integer' },
+            name: { type: 'string', minLength: 1 },
+            x: { type: 'integer' },
+            y: { type: 'integer' },
+            characterName: { type: 'string', minLength: 1, description: 'Character sprite name in Graphics/Characters, without its extension.' },
+            messages: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'string', maxLength: 16384 }, description: 'Dialogue text; each entry starts a new message box.' },
+          },
+          required: ['mapId', 'name', 'x', 'y', 'characterName', 'messages'],
         },
       },
       {
@@ -1169,6 +1186,8 @@ class RPGMakerXPServer {
         return await mapTools.updateMapEvent(this.projectPath, args.mapId, args.eventId, args.updates);
       case 'create_map_event':
         return await mapTools.createMapEvent(this.projectPath, args.mapId, args);
+      case 'create_npc':
+        return await mapTools.createNpc(this.projectPath, args.mapId, args);
       case 'search_map_events':
         return await mapTools.searchMapEvents(this.projectPath, args.mapId, args.searchTerm);
       case 'add_event_command':

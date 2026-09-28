@@ -20,7 +20,12 @@ files are replaced by a synced temporary file and rename. If replacement of a
 later file fails, earlier replacements are rolled back; failed recovery reports
 which files need restoring. Old backups are not deleted automatically.
 
-Keep RPG Maker XP closed during edits. A lock file prevents overlapping writes
+Keep the project closed in RPG Maker XP during edits; the application may stay
+open. Save your own editor changes before File > Close Project, then reopen
+`Game.rxproj` with File > Open Project (Ctrl+O) after external writes finish.
+Do not save a stale loaded project after external writes. A running `RPGXP.exe`
+does not establish whether a project is loaded, and the server does not inspect
+or automatically save/discard editor state. A lock file prevents overlapping writes
 from cooperating MCP processes, and content hashes detect changes since a file
 was read. An unrelated process can still race after that check. A power failure
 or forced termination between multiple file replacements is not a filesystem

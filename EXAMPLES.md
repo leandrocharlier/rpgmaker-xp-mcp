@@ -201,6 +201,29 @@ boundaries and the terminator.
 Omit `pages` and you get one empty page to build on — usually you then call
 `add_show_text` against `pageIndex: 0`.
 
+### A new NPC
+
+Use `create_npc` for a stationary character with action-button dialogue:
+
+```json
+{
+  "mapId": 1,
+  "name": "Town guide",
+  "x": 3,
+  "y": 4,
+  "characterName": "guide",
+  "messages": ["Welcome to the village!", "The inn is north.\nThe market is east."]
+}
+```
+
+Supply an existing sprite name from `Graphics/Characters` without its extension.
+Each messages entry starts a new box; multiline entries split after four lines.
+The tool builds RGSS defaults and the final command terminator, preserves other
+events, and stages the map and system revision together. It does not create the
+sprite or insert Ruby code. Positions must be inside the map. For advanced
+events, `create_map_event.pages` accepts complete page objects with condition,
+graphic, move route, behavior flags, trigger, and command list.
+
 ### Finding events
 
 > *"Which events on map 3 mention the ferry?"* — `search_map_events`

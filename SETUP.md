@@ -195,7 +195,7 @@ writes a PNG to `Data/.mcp-preview/`.
   sure you restarted the client, and that `npm run build` succeeded.
 - **"Invalid RPG Maker XP project path"** — `RPGMAKER_PROJECT_PATH` must point at
   a folder containing `Data/System.rxdata`; use forward slashes.
-- **`ENOENT` / file errors** — close the RPG Maker XP editor (it locks/rewrites
+- **`ENOENT` / file errors** — close the project in RPG Maker XP (it locks/rewrites
   files), and re-check the path.
 - **`render_map` reports missing graphics** — set `RPGMAKER_RTP_PATH` to your
   RPGXP `rtp/` folder, or ensure the project's `Graphics/Tilesets` & `Autotiles`
@@ -244,8 +244,12 @@ RPGMAKER_PROJECT_PATH=C:/path/to/project node dist/index.js
 - Caution: the server writes to your project's `.rxdata` files directly.
 - It backs up each file to `Data/.mcp-backup/` before its first write per
   session, and bumps `System.magic_number` so existing saves reload edited maps.
-- **Close the RPG Maker XP editor while using the server** — on save the editor
-  rewrites every data file from memory and will clobber external changes.
+- **Close the project before external writes** — save your own editor changes,
+  then choose File > Close Project. The application may remain open. After the
+  MCP finishes, reopen `Game.rxproj` using File > Open Project (Ctrl+O).
+  Saving a stale loaded project can overwrite external edits. A running
+  `RPGXP.exe` does not prove the project is loaded. The MCP does not control
+  editor state or automatically save/discard unsaved changes.
 - Keep your project under version control and test in the editor after changes.
 
 ## Next steps

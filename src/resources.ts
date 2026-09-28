@@ -14,7 +14,7 @@ import { join, dirname } from 'path';
 export const SERVER_INSTRUCTIONS = `RPG Maker XP project editor. These tools read and write a project's RGSS1 Marshal .rxdata directly (actors, skills, items, maps, events, scripts) and render PNG previews.
 
 GOVERNANCE — these tools are the single sanctioned path for edits; they enforce the engine's invariants so the project doesn't drift:
-- Keep the RPG Maker XP EDITOR CLOSED while writing — it rewrites every data file from memory on save and will clobber external changes. The server backs up to Data/.mcp-backup/ and bumps System.magic_number on map writes.
+- Before external writes, save your own editor changes and use File > Close Project. The application may remain open; a running RPGXP.exe alone does not prove that a project is loaded. After writes finish, use File > Open Project (Ctrl+O) to reopen Game.rxproj. Never automatically save or discard unsaved editor changes. Saving a stale loaded project can overwrite external changes. The server keeps versioned backups and bumps System.magic_number on map writes.
 - Use the create_* tools (they mirror the editor's default constructors, so new content is canonical). Don't hand-edit .rxdata.
 - Run validate_assets before shipping to catch broken graphic/audio references.
 
