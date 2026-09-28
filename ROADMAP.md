@@ -78,3 +78,32 @@ The [XP material specification](https://www.rpg-maker.fr/dl/monos/aide/xp/source
 file-size limit; it does not establish a universal practical rendering limit.
 A future merge plan must accept an explicit tested target-runtime height limit
 and reject excess before writing, rather than infer compatibility from MCP budgets.
+
+### Tall XP atlas feasibility (not implemented)
+
+The signed positive tile-ID model permits up to 4,048 regular rows: height
+129,536 at width 256, 33,161,216 pixels, and 126.5 MiB for one RGBA buffer.
+That is not the operation's total memory: source buffers, PNG validation inflate,
+decoder/encoder buffers, and staged output also consume memory. Raising the global
+image cap alone would not provide a safe merge implementation.
+
+Use an explicit, bounded tall-tileset budget scoped to compatible operations,
+requiring width 256, height divisible by 32, and valid signed IDs. Keep general
+image/preview defaults unchanged. Account for aggregate working memory and decode
+sources sequentially; reject estimates above a fixed operation ceiling before
+allocation. Preserve the 64 MiB encoded-file, 128 MiB staged-write/recovery, and
+32 MiB Table limits. Preflight geometry and IDs before decoding; validate actual
+compressed output and all staged data before commit. Large but poorly compressible
+images can still be rejected even when geometry fits.
+
+Tall input support must cover the shared PNG reader, applicable map previews and
+paginated catalogs, and tileset cloning as well as merging; accepting a write that
+all existing readers reject is incomplete. Full-atlas previews may need pagination
+even when the source is accepted. Test both the tall path and unchanged default
+rejections, including malformed PNGs and rollback, on synthetic fixtures.
+
+For concatenation, preserve the chosen base prefix and map each appended bank's
+regular IDs by its row offset. Only skip a repeated prefix after proving pixels,
+properties, and autotile metadata compatible. Reconcile or reject differing
+panorama/fog/battleback settings too: these affect maps sharing the merged record.
+This feasibility assessment does not add a merge tool or change current budgets.
