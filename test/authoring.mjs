@@ -141,7 +141,7 @@ await check('apply_autotile: isolated cell -> variant 47, filled interior -> var
 
 await check('render the painted map (visual pipeline)', async () => {
   if (!(await exists(join(RTP, 'Graphics/Tilesets')))) throw Object.assign(new Error('RTP graphics absent'), { skip: true });
-  const r = await renderMap(PROJ, mapId, { outPath: join(PROJ, 'preview.png') });
+  const r = await renderMap(PROJ, mapId, { outPath: join(PROJ, 'Data', '.mcp-preview', 'preview.png') });
   assert(r.pixel_w === 24 * 32 && r.pixel_h === 18 * 32, `size ${r.pixel_w}x${r.pixel_h}`);
   assert(r.notes.length === 0, `notes: ${r.notes.join('; ')}`);
 });

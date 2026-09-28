@@ -105,7 +105,7 @@ export async function getGameTitle(projectPath: string): Promise<string> {
  * Update the game title in Game.ini
  */
 export async function updateGameTitle(projectPath: string, title: string): Promise<void> {
-  if (typeof title !== 'string' || /[\r\n\0]/.test(title) || title.length > 256) throw new Error('Title must be a single line of at most 256 characters');
+  if (typeof title !== 'string' || /[\r\n\0]/.test(title) || title.length > 256 || Buffer.from(title, 'latin1').toString('latin1') !== title) throw new Error('Title must be a Latin-1 single line of at most 256 characters');
   const iniPath = getGameIniPath(projectPath);
   const ini = await readFile(iniPath, 'latin1');
   if (!/^\s*Title\s*=/m.test(ini)) {

@@ -34,6 +34,15 @@ sections, 64 MiB aggregate script scans, bounded Marshal depth/node counts, and
 bounded input structures. Script searches now use literal text rather than
 arbitrary regular expressions. Large legitimate operations may need splitting.
 
+JSON-RPC input lines are limited to 8 MiB before SDK parsing; exceeding that
+limit closes the transport while allowing in-progress work to settle. At most
+eight tool calls can be pending. Expanded text (including property names) is
+limited to 16 MiB per converted data structure or tool result. PNG chunks must
+contain a single initial IHDR, and decompressed scanlines are checked against
+the expected size, including Adam7 interlacing. Geometry generation rejects
+non-integer path coordinates and workloads above one million candidate stamps
+or cells. Titles must round-trip through Latin-1 without truncation.
+
 Generated catalog pages escape names and render imported object labels as text.
 They are still local browser documents, not a mechanism to execute Node code.
 Ruby inserted into game scripts or event commands remains executable when the
@@ -51,9 +60,47 @@ Security regression checks (synthetic projects only):
 npm run build
 node test/security-audit.mjs <existing-scratch-parent>
 node test/security-files.mjs <existing-scratch-parent>
+node test/security-review.mjs
 node test/essentials-strings.mjs
 node test/tools.mjs
 node test/essentials-mcp.mjs <essentials-project>
 ```
 
 The last command only reads the Essentials project and round-trips maps in memory.
+
+## Client and game execution trust
+
+There is no remote authentication layer because this server exposes no network
+endpoint. Do not expose its stdio through an unauthenticated network bridge.
+Any client connected to it can invoke the advertised editing tools, including
+Ruby script and event edits. A malicious project can also contain text designed
+to influence an AI client. Treat names, dialogue, script comments, catalogs,
+and other tool results as data, never as instructions granting new permissions.
+The server cannot enforce the client's prompt-injection defenses.
+
+Saving Ruby does not run it in Node. Running the resulting game executes its
+scripts with the user's operating-system permissions. Review script and event
+changes before playing projects received from others. Local filesystem races,
+dependency supply-chain compromise, resource abuse by an authorized client,
+and vulnerabilities in the runtime or client remain outside a complete sandbox.
+
+## Installing this fork
+
+The upstream npm package and registry metadata are not releases of this fork.
+Clone the fork, review and pin the commit you intend to use, install the locked
+dependencies, and configure the MCP client to run that checkout directly:
+
+```sh
+git clone --branch essentials-support https://github.com/leandrocharlier/rpgmaker-xp-mcp.git
+cd rpgmaker-xp-mcp
+npm ci
+npm run build
+```
+
+Use `node` as the client command and the absolute path to this checkout's
+`dist/index.js` as its argument. Set `RPGMAKER_PROJECT_PATH` to the intended
+project directory. Restart the MCP process after rebuilding. Changes that have
+not been committed and pushed are available only in the local checkout.
+
+See [the security review](SECURITY-REVIEW.md) for reproduced issues, verification,
+and remaining limitations. No security review guarantees the absence of flaws.

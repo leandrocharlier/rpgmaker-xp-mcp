@@ -11,7 +11,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { SERVER_INSTRUCTIONS, listResources, readResource } from './resources.js';
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
-import { checkValue, runProjectOperation, hardenSchema } from './utils/security.js';
+import { checkValue, runProjectOperation, hardenSchema, boundedStdioInput } from './utils/security.js';
 
 import { validateProjectPath } from './utils/fileHandler.js';
 import * as actorTools from './tools/actorTools.js';
@@ -42,6 +42,7 @@ class RPGMakerXPServer {
   private server: Server;
   private projectPath: string;
   private definitions: Tool[] = [];
+  private activeToolCalls = 0;
   private validators = new Map<string, ReturnType<AjvJsonSchemaValidator['getValidator']>>();
 
   constructor() {
@@ -104,6 +105,8 @@ class RPGMakerXPServer {
 
     // Handle tool execution
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      if (this.activeToolCalls >= 8) return { isError: true, content: [{ type: 'text', text: 'Too many pending tool calls; retry after completion' }] };
+      this.activeToolCalls++;
       try {
         if (!this.projectPath) {
           throw new Error('RPGMAKER_PROJECT_PATH environment variable not set');
@@ -136,7 +139,7 @@ class RPGMakerXPServer {
             },
           ],
         };
-      }
+      } finally { this.activeToolCalls--; }
     });
   }
 
@@ -1069,6 +1072,7 @@ class RPGMakerXPServer {
 
   private async handleToolCall(name: string, args: any): Promise<any> {
     const result = await this.executeToolFunction(name, args);
+    checkValue(result);
 
     return {
       content: [
@@ -1304,8 +1308,16 @@ class RPGMakerXPServer {
   }
 
   async run(): Promise<void> {
-    const transport = new StdioServerTransport();
+    const input = boundedStdioInput();
+    const transport = new StdioServerTransport(input);
+    input.on('error', () => {
+      process.stdin.unpipe(input);
+      process.stdin.pause();
+      process.exitCode = 1;
+      void this.server.close();
+    });
     await this.server.connect(transport);
+    process.stdin.pipe(input);
     console.error('RPG Maker XP MCP server running on stdio');
   }
 }

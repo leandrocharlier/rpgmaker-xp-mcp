@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { readdirSync, existsSync } from 'fs';
 import { readRxdataFile, getDataPath, getMapPath } from '../utils/fileHandler.js';
+import { allowed } from '../utils/security.js';
 
 /**
  * Referenced-asset validator (FR-15). Scans the data files for every graphic
@@ -20,6 +21,7 @@ const DEFAULT_RTP = process.env.RPGMAKER_RTP_PATH
 /** Lowercased base-name (no extension) index of a folder, cached. */
 const folderCache = new Map<string, Set<string>>();
 function indexFolder(absDir: string): Set<string> {
+  absDir = allowed(absDir);
   let set = folderCache.get(absDir);
   if (set) return set;
   set = new Set<string>();

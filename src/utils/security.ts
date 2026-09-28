@@ -3,6 +3,7 @@ import { lstatSync, realpathSync } from 'node:fs';
 import { open, rename, unlink, mkdir, copyFile } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, dirname, join, basename } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
+import { Transform } from 'node:stream';
 
 export const MAX_FILE = 64 * 1024 * 1024;
 const MAX_TRANSACTION = 128 * 1024 * 1024;
@@ -180,18 +181,42 @@ export function runProjectOperation<T>(project: string, rtp: string | undefined,
   return task;
 }
 
-export function checkValue(value: unknown, depth = 0, budget = { nodes: 0 }): void {
+export function checkValue(value: unknown, depth = 0, budget = { nodes: 0, text: 0 }): void {
   if (depth > 64 || ++budget.nodes > 1000000) throw new Error('Input structure exceeds safety limits');
   if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('Numbers must be finite');
   if (typeof value === 'string' && value.length > 4 * 1024 * 1024) throw new Error('String exceeds safety limit');
+  if (typeof value === 'string') {
+    budget.text += value.length;
+    if (budget.text > 16 * 1024 * 1024) throw new Error('Aggregate text exceeds safety limits');
+  }
   if (value && typeof value === 'object') for (const [key, child] of Object.entries(value)) {
     if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Unsafe property name');
+    budget.text += key.length;
+    if (budget.text > 16 * 1024 * 1024) throw new Error('Aggregate text exceeds safety limits');
     checkValue(child, depth + 1, budget);
   }
 }
 
 export function canvasBudget(w: number, h: number): void {
   if (!Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w < 1 || h < 1 || w * h > 16 * 1024 * 1024) throw new Error('Image exceeds the 16 megapixel limit or has invalid dimensions');
+}
+
+/** Bound JSON-RPC lines before the SDK buffers and parses them. */
+export function boundedStdioInput(limit = 8 * 1024 * 1024): Transform {
+  let length = 0;
+  return new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      let start = 0;
+      while (start < chunk.length) {
+        const end = chunk.indexOf(10, start);
+        length += (end === -1 ? chunk.length : end) - start;
+        if (length > limit) { callback(new Error('MCP input line exceeds safety limits')); return; }
+        if (end === -1) break;
+        length = 0; start = end + 1;
+      }
+      callback(null, chunk);
+    },
+  });
 }
 
 export function hardenSchema(schema: any, key = ''): void {

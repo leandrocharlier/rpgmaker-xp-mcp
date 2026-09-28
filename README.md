@@ -1,5 +1,10 @@
 # RPG Maker XP MCP Server
 
+> **Security fork:** The changes in this checkout are not the upstream npm package.
+> Follow the [fork installation instructions](SECURITY.md#installing-this-fork)
+> and review the [security boundary](SECURITY.md) before using it. The inherited
+> `npx rpgmaker-xp-mcp` examples below launch upstream, not this fork.
+
 **Build RPG Maker XP games by describing what you want.**
 
 > *"Make a healing potion that restores 200 HP and costs 150 gold."*

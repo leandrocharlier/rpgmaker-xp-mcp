@@ -3,7 +3,7 @@ import { join, extname } from 'path';
 
 export { readRxdataFile, writeRxdataFile } from './rxdata.js';
 
-import { contained, assertId, versionedBackup } from './security.js';
+import { contained, assertId, versionedBackup, allowed } from './security.js';
 export const backupBeforeWrite = versionedBackup;
 
 /**
@@ -11,7 +11,7 @@ export const backupBeforeWrite = versionedBackup;
  */
 export async function listFiles(dirPath: string, extension: string): Promise<string[]> {
   try {
-    const files = await readdir(dirPath);
+    const files = await readdir(allowed(dirPath));
     return files.filter(file => extname(file) === extension);
   } catch (error) {
     throw new Error(`Failed to list files in ${dirPath}: ${error}`);

@@ -2,6 +2,10 @@
 
 Step-by-step guide to install and configure the RPG Maker XP MCP Server.
 
+For this security fork, follow [Installing this fork](SECURITY.md#installing-this-fork).
+Use its locally compiled `dist/index.js`; the inherited npm/npx examples in this
+guide refer to the upstream package and do not include this checkout's fixes.
+
 ## Prerequisites
 
 - Node.js 18 or higher (`npm` comes with it)

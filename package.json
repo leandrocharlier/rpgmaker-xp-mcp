@@ -20,7 +20,8 @@
     "WISDOM.md",
     "THIRD-PARTY-NOTICES.md",
     "research/*.md",
-    "SECURITY.md"
+    "SECURITY.md",
+    "SECURITY-REVIEW.md"
   ],
   "scripts": {
     "build": "tsc",

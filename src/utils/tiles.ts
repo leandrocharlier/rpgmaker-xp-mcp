@@ -2,6 +2,41 @@ import { readLimited as readFile, canvasBudget, contained } from './security.js'
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { PNG } from 'pngjs';
+import { inflateSync } from 'node:zlib';
+
+// Validate the chunk structure and decompressed size before pngjs allocates.
+// pngjs accepts repeated IHDRs and its interlaced sync path inflates without a cap.
+function validatePng(bytes: Buffer): void {
+  let offset = 8, headers = 0, ended = false, chunks = 0;
+  const compressed: Buffer[] = [];
+  while (offset < bytes.length) {
+    if (offset + 12 > bytes.length || ++chunks > 100000) throw new Error('Invalid PNG chunk structure');
+    const size = bytes.readUInt32BE(offset);
+    const type = bytes.toString('ascii', offset + 4, offset + 8);
+    if (offset + 12 + size > bytes.length) throw new Error('Truncated PNG chunk');
+    if (offset === 8 && type !== 'IHDR') throw new Error('PNG must start with IHDR');
+    if (type === 'IHDR' && (++headers !== 1 || offset !== 8 || size !== 13)) throw new Error('Invalid or duplicate PNG IHDR');
+    if (type === 'PLTE' && (size > 768 || size % 3 !== 0)) throw new Error('Invalid PNG palette');
+    if (type === 'IDAT') compressed.push(bytes.subarray(offset + 8, offset + 8 + size));
+    offset += 12 + size;
+    if (type === 'IEND') { if (size !== 0 || offset !== bytes.length) throw new Error('Invalid PNG end'); ended = true; break; }
+  }
+  if (headers !== 1 || !ended || !compressed.length) throw new Error('Incomplete PNG');
+  const width = bytes.readUInt32BE(16), height = bytes.readUInt32BE(20);
+  const depth = bytes[24], color = bytes[25], interlace = bytes[28];
+  const channels = ({ 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 } as Record<number, number>)[color];
+  if (!channels || ![1, 2, 4, 8, 16].includes(depth) || interlace > 1) throw new Error('Invalid PNG format');
+  const passes = interlace ? [[0,0,8,8], [4,0,8,8], [0,4,4,8], [2,0,4,4], [0,2,2,4], [1,0,2,2], [0,1,1,2]] : [[0,0,1,1]];
+  let expected = 0;
+  for (const [x, y, dx, dy] of passes) {
+    const w = Math.max(0, Math.ceil((width - x) / dx)), h = Math.max(0, Math.ceil((height - y) / dy));
+    if (w && h) expected += (Math.ceil(w * channels * depth / 8) + 1) * h;
+  }
+  try {
+    const raw = inflateSync(Buffer.concat(compressed), { maxOutputLength: expected });
+    if (raw.length !== expected) throw new Error('Unexpected decompressed length');
+  } catch { throw new Error('PNG decompression exceeds safety limits or is invalid'); }
+}
 
 /**
  * Tiny RGBA image type used for compositing map previews. `data` is straight
@@ -21,6 +56,7 @@ export async function decodePng(path: string): Promise<Canvas> {
   const bytes = await readFile(path);
   if (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('Invalid PNG');
   canvasBudget(bytes.readUInt32BE(16), bytes.readUInt32BE(20));
+  validatePng(bytes);
   const png = PNG.sync.read(bytes);
   return { width: png.width, height: png.height, data: png.data };
 }

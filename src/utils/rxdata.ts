@@ -105,23 +105,28 @@ function encodeColorTone(value: PlainColorTone): RubyObject {
 // Generic conversion
 // ---------------------------------------------------------------------------
 
-export function toPlain(value: unknown, depth = 0, budget = { nodes: 0 }): any {
+export function toPlain(value: unknown, depth = 0, budget = { nodes: 0, text: 0 }): any {
   if (depth > 64 || ++budget.nodes > 1000000) throw new Error('Marshal conversion exceeds safety limits');
   const convert = (v: unknown) => toPlain(v, depth + 1, budget);
+  const text = (v: string) => {
+    budget.text += v.length;
+    if (budget.text > 16 * 1024 * 1024) throw new Error('Marshal expanded text exceeds safety limits');
+    return v;
+  };
   if (
     value === null ||
     typeof value === 'number' ||
     typeof value === 'boolean' ||
     typeof value === 'string'
   ) {
-    return value;
+    return typeof value === 'string' ? text(value) : value;
   }
   if (value instanceof Uint8Array) {
     // String that had no encoding info; XP data is UTF-8 in practice
-    return textDecoder.decode(value);
+    return text(textDecoder.decode(value));
   }
   if (typeof value === 'symbol') {
-    return Symbol.keyFor(value);
+    return text(Symbol.keyFor(value) ?? '');
   }
   if (Array.isArray(value)) {
     return value.map(convert);
@@ -131,6 +136,7 @@ export function toPlain(value: unknown, depth = 0, budget = { nodes: 0 }): any {
     const obj: any = {};
     for (const [k, v] of value) {
       const key = k instanceof Uint8Array ? textDecoder.decode(k) : String(k);
+      text(key);
       if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Unsafe Marshal key');
       obj[key] = convert(v);
     }
@@ -138,8 +144,14 @@ export function toPlain(value: unknown, depth = 0, budget = { nodes: 0 }): any {
   }
   if (value instanceof RubyObject) {
     const className = Symbol.keyFor(value.class) ?? '?';
+    text(className);
     if (value.userDefined) {
-      if (className === 'Table') return decodeTable(value.userDefined);
+      if (className === 'Table') {
+        const table = decodeTable(value.userDefined);
+        budget.nodes += table.data.length;
+        if (budget.nodes > 1000000) throw new Error('Marshal expanded Table exceeds safety limits');
+        return table;
+      }
       if (className === 'Color' || className === 'Tone') {
         return decodeColorTone(className, value.userDefined);
       }
@@ -149,6 +161,7 @@ export function toPlain(value: unknown, depth = 0, budget = { nodes: 0 }): any {
     for (const sym of Object.getOwnPropertySymbols(value)) {
       const key = Symbol.keyFor(sym);
       if (!key || !key.startsWith('@')) continue;
+      text(key);
       if (['__proto__', 'constructor', 'prototype'].includes(key.slice(1))) throw new Error('Unsafe Marshal key');
       obj[key.slice(1)] = convert((value as any)[sym]);
     }

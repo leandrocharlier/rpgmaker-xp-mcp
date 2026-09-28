@@ -642,6 +642,10 @@ function rng(seed: number) {
 export function blobCells(
   cx: number, cy: number, rx: number, ry: number, irregularity = 0.4, seed = 1
 ): Array<[number, number]> {
+  if (![cx, cy, rx, ry, irregularity, seed].every(Number.isFinite) || rx <= 0 || ry <= 0 ||
+      Math.abs(cx) > 1000000 || Math.abs(cy) > 1000000 || (2 * Math.ceil(rx) + 5) * (2 * Math.ceil(ry) + 5) > 1000000) {
+    throw new Error('Geometry work exceeds safety limits');
+  }
   const rand = rng(seed);
   // per-angle radius multipliers (8 control points, smoothed)
   const ctrl = Array.from({ length: 8 }, () => 1 - irregularity / 2 + rand() * irregularity);
@@ -699,7 +703,16 @@ export function sanitizeAutotileCells(input: Array<[number, number]>): Array<[nu
  * continuous instead of breaking into isolated tiles.
  */
 export function pathCells(points: Array<[number, number]>, width = 2): Array<[number, number]> {
+  if (!Array.isArray(points) || points.length > 100000 || !Number.isFinite(width) || width < 1 || width > 500 ||
+      points.some(p => !Array.isArray(p) || p.length !== 2 || p.some(v => !Number.isSafeInteger(v) || Math.abs(v) > 1000000))) {
+    throw new Error('Geometry work exceeds safety limits: path points must be integer pairs');
+  }
   const w = Math.max(1, Math.round(width)), r = Math.floor((w - 1) / 2);
+  let work = w * w;
+  for (let i = 1; i < points.length; i++) {
+    work += (Math.abs(points[i][0] - points[i - 1][0]) + Math.abs(points[i][1] - points[i - 1][1])) * w * w;
+    if (work > 1000000) throw new Error('Geometry work exceeds safety limits');
+  }
   const cells = new Set<string>();
   const stamp = (x: number, y: number) => { for (let dy = 0; dy < w; dy++) for (let dx = 0; dx < w; dx++) cells.add(`${x + dx - r},${y + dy - r}`); };
   for (let i = 0; i < points.length - 1; i++) {
