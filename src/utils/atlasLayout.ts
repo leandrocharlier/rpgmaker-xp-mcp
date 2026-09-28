@@ -1,4 +1,4 @@
-import { canvasBudget } from './security.js';
+import { canvasBudget, tallTilesetsEnabled } from './security.js';
 
 export const MAX_ATLAS_PIECES = 128;
 export const MAX_DECODE_PIXELS = 32 * 1024 * 1024;
@@ -13,7 +13,8 @@ export interface Shelf { x: number; y: number; shelfHeight: number }
 export function measurePiece(piece: AtlasPiece) {
   const { rect } = piece;
   const scale = piece.scale ?? 1, padding = piece.padding ?? 0;
-  if (!rect || ![rect.x, rect.y, rect.width, rect.height, scale, padding].every(Number.isSafeInteger) || rect.x < 0 || rect.y < 0 || rect.width < 1 || rect.width > 500 || rect.height < 1 || rect.height > 500 || scale < 1 || scale > 8 || padding < 0 || padding > 32) throw new Error('Invalid rectangle, scale or padding');
+  const maxHeight = tallTilesetsEnabled() ? 129536 : 500;
+  if (!rect || ![rect.x, rect.y, rect.width, rect.height, scale, padding].every(Number.isSafeInteger) || rect.x < 0 || rect.y < 0 || rect.width < 1 || rect.width > 500 || rect.height < 1 || rect.height > maxHeight || scale < 1 || scale > 8 || padding < 0 || padding > 32) throw new Error('Invalid rectangle, scale or padding');
   const width = rect.width * scale, height = rect.height * scale;
   const slotWidth = Math.ceil((width + padding * 2) / 32) * 32;
   const slotHeight = Math.ceil((height + padding * 2) / 32) * 32;
@@ -30,7 +31,7 @@ export function placePiece(shelf: Shelf, box: ReturnType<typeof measurePiece>) {
   let { x, y, shelfHeight } = shelf;
   if (x + box.slotWidth > 256) { x = 0; y += shelfHeight; shelfHeight = 0; }
   const height = y + Math.max(shelfHeight, box.slotHeight);
-  canvasBudget(256, height);
+  canvasBudget(256, height, true);
   if (384 + height / 4 > 32768) throw new Error('Atlas exceeds RGSS signed tile ID range');
   return { x, y, height, next: { x: x + box.slotWidth, y, shelfHeight: Math.max(shelfHeight, box.slotHeight) } };
 }

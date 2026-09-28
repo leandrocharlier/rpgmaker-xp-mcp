@@ -9,7 +9,7 @@ import { chargeTable, validatePlainTable } from './tableValidation.js';
 
 export const MAX_FILE = 64 * 1024 * 1024;
 const MAX_TRANSACTION = 128 * 1024 * 1024;
-type State = { project: string; rtp?: string; observed: Map<string, string>; writes: Map<string, Buffer>; guards: Array<() => Promise<void>> };
+type State = { project: string; rtp?: string; observed: Map<string, string>; writes: Map<string, Buffer>; guards: Array<() => Promise<void>>; decodedPixels: number };
 const scope = new AsyncLocalStorage<State>();
 let queue: Promise<unknown> = Promise.resolve();
 const digest = (b: Buffer) => createHash('sha256').update(b).digest('hex');
@@ -199,7 +199,7 @@ async function commit(state: State): Promise<void> {
 }
 
 export function runProjectOperation<T>(project: string, rtp: string | undefined, mutates: boolean, fn: () => Promise<T>): Promise<T> {
-  const task = queue.then(() => scope.run({ project: resolve(project), rtp, observed: new Map(), writes: new Map(), guards: [] }, async () => {
+  const task = queue.then(() => scope.run({ project: resolve(project), rtp, observed: new Map(), writes: new Map(), guards: [], decodedPixels: 0 }, async () => {
     const lock = contained(project, join(project, 'Data', '.mcp-write.lock'));
     let handle;
     try {
@@ -242,8 +242,19 @@ export function checkValue(value: unknown, depth = 0, budget = { nodes: 0, text:
   }
 }
 
-export function canvasBudget(w: number, h: number): void {
-  if (!Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w < 1 || h < 1 || w * h > 16 * 1024 * 1024) throw new Error('Image exceeds the 16 megapixel limit or has invalid dimensions');
+export function tallTilesetsEnabled(): boolean {
+  return process.env.RPGMAKER_ALLOW_TALL_XP_TILESETS === '1';
+}
+
+export function canvasBudget(w: number, h: number, xpTileset = false): void {
+  const tall = xpTileset && tallTilesetsEnabled() && w === 256 && h % 32 === 0 && h <= 129536;
+  if (!Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w < 1 || h < 1 || w * h > (tall ? 32 : 16) * 1024 * 1024) throw new Error('Image exceeds the 16 megapixel limit (or opted-in XP tileset limit) or has invalid dimensions');
+}
+
+/** Charge before inflate/decode; independent from encoded-file and write budgets. */
+export function chargeImageDecode(pixels: number): void {
+  const state = scope.getStore();
+  if (state && (state.decodedPixels += pixels) > 32 * 1024 * 1024) throw new Error('Images exceed the 32 megapixel aggregate decode budget');
 }
 
 /** Bound JSON-RPC lines before the SDK buffers and parses them. */
@@ -264,7 +275,7 @@ export function boundedStdioInput(limit = 8 * 1024 * 1024): Transform {
   });
 }
 
-export function hardenSchema(schema: any, key = ''): void {
+export function hardenSchema(schema: any, key = '', pixelRect = false): void {
   if (!schema || typeof schema !== 'object') return;
   if (schema.type === 'number' || schema.type === 'integer') {
     schema.minimum ??= -1000000; schema.maximum ??= 1000000;
@@ -276,12 +287,12 @@ export function hardenSchema(schema: any, key = ''): void {
       schema.type = 'integer'; schema.minimum = 0;
     }
     if (['w', 'h', 'width', 'height', 'radius'].includes(key)) {
-      schema.type = 'integer'; schema.minimum = 1; schema.maximum = 500;
+      schema.type = 'integer'; schema.minimum = 1; schema.maximum = pixelRect && key === 'height' && tallTilesetsEnabled() ? 129536 : 500;
     }
     if (key === 'scale') { schema.type = 'integer'; schema.minimum = 1; schema.maximum = 8; }
   }
   if (schema.type === 'array') schema.maxItems ??= 100000;
   if (schema.type === 'string') schema.maxLength ??= 4 * 1024 * 1024;
-  for (const [name, prop] of Object.entries(schema.properties ?? {})) hardenSchema(prop, name);
+  for (const [name, prop] of Object.entries(schema.properties ?? {})) hardenSchema(prop, name, key === 'rect');
   if (schema.items) hardenSchema(schema.items);
 }

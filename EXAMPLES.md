@@ -539,6 +539,24 @@ another engine.
 
 ---
 
+## Tall XP tilesets
+
+For tested runtimes supporting tall atlases, launch the MCP with
+`RPGMAKER_ALLOW_TALL_XP_TILESETS=1`. This enables bounded tall input for composing,
+planning, registering, cloning, map rendering, and paginated tileset catalogs.
+See [the exact limits](SECURITY.md#opt-in-tall-xp-tilesets). It does not raise
+the general image limit or make appended flags copy automatically.
+
+An explicit strip can be appended without splitting into 500-pixel chunks:
+
+```json
+{"outputName":"combined","appendToTilesetId":1,"pieces":[{"sourcePath":"Graphics/Tilesets/source.png","rect":{"x":0,"y":0,"width":256,"height":16352},"scale":1}]}
+```
+
+This is a `compose_tileset_atlas` call. Inspect `plan_tileset_import` first and
+review the new flags and map/event mappings separately. Repeated decoding counts
+against the operation budget; prefer one full strip per source where possible.
+
 ## Removing unused trailing tilesets
 
 `truncate_unused_tilesets` removes a contiguous suffix of the tileset database.

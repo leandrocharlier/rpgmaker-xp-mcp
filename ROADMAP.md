@@ -69,7 +69,7 @@ appended pieces receive zero flags and maps are not remapped. `plan_tileset_impo
 plans packing and budgets, not a property-preserving merge. Neither tool certifies
 that a merged atlas will work in a particular game runtime.
 
-The MCP has no fixed 16,384-pixel atlas height ceiling. Its image budget is
+The MCP has no fixed 16,384-pixel atlas height ceiling. Its default image budget is
 16 * 1024 * 1024 pixels, allowing 65,536 pixels of height at width 256 before
 other budgets apply. It also checks signed tile IDs up to 32,767. These are MCP
 validation limits, not guarantees about editor, runtime, GPU, or preview capacity.
@@ -79,7 +79,13 @@ file-size limit; it does not establish a universal practical rendering limit.
 A future merge plan must accept an explicit tested target-runtime height limit
 and reject excess before writing, rather than infer compatibility from MCP budgets.
 
-### Tall XP atlas feasibility (not implemented)
+### Tall XP atlas support and remaining merge work
+
+Bounded tall input/output is now available through the explicit
+`RPGMAKER_ALLOW_TALL_XP_TILESETS=1` configuration; see
+[security limits](SECURITY.md#opt-in-tall-xp-tilesets). A semantic merge and a hard
+total-process-memory ceiling remain unimplemented. The constraints below describe
+the broader merge design, not additional guarantees of the current pixel budget.
 
 The signed positive tile-ID model permits up to 4,048 regular rows: height
 129,536 at width 256, 33,161,216 pixels, and 126.5 MiB for one RGBA buffer.
@@ -106,4 +112,4 @@ For concatenation, preserve the chosen base prefix and map each appended bank's
 regular IDs by its row offset. Only skip a repeated prefix after proving pixels,
 properties, and autotile metadata compatible. Reconcile or reject differing
 panorama/fog/battleback settings too: these affect maps sharing the merged record.
-This feasibility assessment does not add a merge tool or change current budgets.
+The opt-in profile does not add a merge tool or remove the default image limits.

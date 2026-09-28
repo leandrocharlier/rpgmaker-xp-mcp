@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { allowed, readLimited, canvasBudget } from '../utils/security.js';
+import { allowed, readLimited, canvasBudget, tallTilesetsEnabled } from '../utils/security.js';
 import { resolveGraphic } from '../utils/tiles.js';
 import { loadTilesetRecord } from './tilesetTools.js';
 import { AtlasPiece, Shelf, measurePiece, placePiece, prefixHeight, MAX_ATLAS_PIECES, MAX_DECODE_PIXELS } from '../utils/atlasLayout.js';
@@ -22,7 +22,7 @@ export async function planTilesetImport(project: string, args: { baseTilesetId: 
     if (inputBytes > 128 * 1024 * 1024) throw new Error('Planning inputs exceed the 128 MiB read budget');
     if (bytes.length < 33 || bytes.subarray(0,8).toString('hex') !== '89504e470d0a1a0a' || bytes.readUInt32BE(8) !== 13 || bytes.toString('ascii',12,16) !== 'IHDR') throw new Error('Invalid PNG header');
     const width = bytes.readUInt32BE(16), height = bytes.readUInt32BE(20);
-    canvasBudget(width, height);
+    canvasBudget(width, height, true);
     const result = { width, height, pixels: width * height }; metadata.set(path,result); return result;
   }
   const rtp = process.env.RPGMAKER_RTP_PATH || 'C:/Program Files (x86)/Steam/steamapps/common/RPGXP/rtp';
@@ -30,7 +30,7 @@ export async function planTilesetImport(project: string, args: { baseTilesetId: 
   if (!basePath) throw new Error('Base tileset graphic not found');
   const prefix = await inspect(basePath);
   const reservedHeight = prefixHeight(prefix.width,prefix.height,base.size);
-  canvasBudget(256,reservedHeight);
+  canvasBudget(256,reservedHeight,true);
   const groups: Prepared[][] = [];
   const seen = new Set<string>();
   let previous: string | undefined;
@@ -94,7 +94,7 @@ export async function planTilesetImport(project: string, args: { baseTilesetId: 
   const projectedTableBytes = projectedCells * 2 + (base.entries.filter(Boolean).length + plans.length) * 3 * 20;
   if (projectedTableBytes > MAX_TABLE_BYTES) throw new Error('Proposed banks exceed the 32 MiB aggregate Table byte budget');
   return {read_only:true,base_tileset_id:args.baseTilesetId,prefix:{source_path:basePath,original_height:prefix.height,reserved_height:reservedHeight,table_size:base.size},bank_count:plans.length,piece_count:args.pieces.length,projected_property_table_cells:projectedCells,projected_property_table_bytes:projectedTableBytes,banks:plans,
-    limits:{image_pixels:16*1024*1024,decoded_source_pixels_per_bank:MAX_DECODE_PIXELS,pieces_per_bank:MAX_ATLAS_PIECES,max_tile_id:32767,transaction_bytes:128*1024*1024},
+    limits:{image_pixels:16*1024*1024,tall_xp_tilesets_enabled:tallTilesetsEnabled(),xp_tileset_max_height:tallTilesetsEnabled()?129536:65536,decoded_source_pixels_per_bank:MAX_DECODE_PIXELS,pieces_per_bank:MAX_ATLAS_PIECES,max_tile_id:32767,transaction_bytes:128*1024*1024},
     notes:['No files, directories, backups or locks are written. PNG headers are inspected; full decode, encoding size and database serialization are validated only when composing.',
       'Memory estimates cover RGBA working buffers, not total process RAM, PNG codec buffers or exact compressed file sizes. Normal file/transaction/input limits still apply.',
       'Clone the original base separately for each bank, then compose using that clone and compose_pieces. Do not chain appended banks. No IDs for new database records are reserved.',

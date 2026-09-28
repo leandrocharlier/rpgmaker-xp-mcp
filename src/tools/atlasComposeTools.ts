@@ -35,7 +35,7 @@ export async function composeTilesetAtlas(project: string, args: { outputName: s
     const rtp = process.env.RPGMAKER_RTP_PATH || 'C:/Program Files (x86)/Steam/steamapps/common/RPGXP/rtp';
     prefixPath = resolveGraphic(project, rtp, 'Tilesets', record.tileset.tileset_name);
     if (!prefixPath) throw new Error('Existing tileset graphic not found');
-    prefix = await decodePng(prefixPath);
+    prefix = await decodePng(prefixPath, true);
     baseHeight = prefixHeight(prefix.width, prefix.height, record.size);
     decodedPixels += prefix.width * prefix.height;
   }
@@ -47,24 +47,24 @@ export async function composeTilesetAtlas(project: string, args: { outputName: s
     const { width, height, slotWidth, slotHeight, scale, padding } = box;
     const { x, y, next } = placePiece(shelf, box);
     const sourcePath = allowed(resolve(project, piece.sourcePath));
-    const source = await decodePng(sourcePath);
+    const source = await decodePng(sourcePath, true);
     decodedPixels += source.width * source.height;
     if (decodedPixels > MAX_DECODE_PIXELS) throw new Error('Sources exceed the 32 megapixel aggregate decode budget');
     if (rect.x + rect.width > source.width || rect.y + rect.height > source.height) throw new Error('Source rectangle exceeds image bounds');
-    const crop = makeCanvas(rect.width, rect.height);
+    const crop = makeCanvas(rect.width, rect.height, true);
     copy(source, crop, rect.x, rect.y, rect.width, rect.height, 0, 0);
     const image = scaleCanvas(crop, scale);
     const tileIds = Array.from({ length: slotHeight / 32 }, (_, row) => Array.from({ length: slotWidth / 32 }, (_, col) => 384 + (y / 32 + row) * 8 + x / 32 + col));
     prepared.push({ image, entry: { index, source_path: sourcePath, source_rect: rect, scale, padding, output_rect: { x: x + padding, y: y + padding, width, height }, tile_rect: { x, y, width: slotWidth, height: slotHeight }, tile_ids: tileIds } });
     shelf = next;
   }
-  const atlas = makeCanvas(256, shelf.y + shelf.shelfHeight);
+  const atlas = makeCanvas(256, shelf.y + shelf.shelfHeight, true);
   if (prefix) copy(prefix, atlas, 0, 0, prefix.width, prefix.height, 0, 0);
   for (const { image, entry } of prepared) copy(image, atlas, 0, 0, image.width, image.height, entry.output_rect.x, entry.output_rect.y);
   const tableSize = 384 + atlas.height / 4;
   const manifest = { schema_version: 1, width: 256, height: atlas.height, image_path: outputPath, tileset_id: args.appendToTilesetId ?? null, prefix: { source_path: prefixPath, original_height: prefix?.height ?? 0, reserved_height: baseHeight }, pieces: prepared.map(p => p.entry), note: 'IDs include transparent tile padding. New flags are zero placeholders; review passability, priority and terrain explicitly.' };
   await safeMkdir(imageDir); await safeMkdir(manifestDir);
-  await atomicWriteFile(outputPath, encodePng(atlas));
+  await atomicWriteFile(outputPath, encodePng(atlas, true));
   await atomicWriteFile(manifestPath, JSON.stringify(manifest, null, 2));
   if (record) {
     record.tileset.tileset_name = args.outputName;

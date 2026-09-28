@@ -16,13 +16,14 @@ const DEFAULT_RTP = process.env.RPGMAKER_RTP_PATH
 
 /** Decoded-graphic cache, keyed by resolved file path, shared across calls. */
 const decodeCache = new Map<string, Canvas>();
-async function decodeCached(path: string): Promise<Canvas> {
-  let img = decodeCache.get(path);
+async function decodeCached(path: string, xpTileset = false): Promise<Canvas> {
+  const key = `${xpTileset}:${path}`;
+  let img = decodeCache.get(key);
   if (!img) {
-    img = await decodePng(path);
+    img = await decodePng(path, xpTileset);
     const cachedBytes = [...decodeCache.values()].reduce((n, c) => n + c.data.byteLength, 0);
     if (decodeCache.size >= 8 || cachedBytes + img.data.byteLength > 64 * 1024 * 1024) decodeCache.clear();
-    decodeCache.set(path, img);
+    if (img.data.byteLength <= 64 * 1024 * 1024) decodeCache.set(key, img);
   }
   return img;
 }
@@ -56,7 +57,7 @@ export async function renderTilesetAtlas(
   if (!ts) throw new Error(`Tileset ${tilesetId} not found`);
 
   const tsPath = resolveGraphic(projectPath, DEFAULT_RTP, 'Tilesets', ts.tileset_name);
-  const img = tsPath ? await decodeCached(tsPath) : null;
+  const img = tsPath ? await decodeCached(tsPath, true) : null;
   if (!img) throw new Error(`tileset graphic '${ts.tileset_name}' not found`);
   const cols = Math.floor(img.width / 32), rows = Math.floor(img.height / 32);
   const cell = 32 * scale;
@@ -157,7 +158,7 @@ export async function renderMap(
   // Tileset graphic (ids >= 384). Width is fixed at 8 cols in XP, but derive it
   // from the bitmap so unusual tilesets still map correctly.
   const tilesetPath = resolveGraphic(projectPath, DEFAULT_RTP, 'Tilesets', ts.tileset_name);
-  const tilesetImg = tilesetPath ? await decodeCached(tilesetPath) : null;
+  const tilesetImg = tilesetPath ? await decodeCached(tilesetPath, true) : null;
   if (!tilesetImg) notes.push(`tileset graphic '${ts.tileset_name}' not found (project Graphics/ or RTP)`);
   const tilesetCols = tilesetImg ? Math.floor(tilesetImg.width / 32) : 8;
 

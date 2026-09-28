@@ -106,7 +106,7 @@ async function loadTileset(projectPath: string, tilesetId: number): Promise<{ ts
   if (!ts) throw new Error(`Tileset ${tilesetId} not found`);
   const sourcePath = resolveGraphic(projectPath, DEFAULT_RTP, 'Tilesets', ts.tileset_name);
   if (!sourcePath) throw new Error(`tileset graphic '${ts.tileset_name}' not found`);
-  const image = await decodePng(sourcePath);
+  const image = await decodePng(sourcePath, true);
   if (image.width % 32 !== 0 || image.height % 32 !== 0) {
     throw new Error(`tileset graphic must be divisible by 32px (got ${image.width}x${image.height})`);
   }

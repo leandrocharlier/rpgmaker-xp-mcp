@@ -135,8 +135,8 @@ function fingerprint(filePath: string, w: number, h: number): Fingerprint {
 // classify_asset
 // ---------------------------------------------------------------------------
 
-export async function classifyAsset(filePath: string): Promise<any> {
-  const img = await decodePng(filePath);
+export async function classifyAsset(filePath: string, decoded?: Canvas): Promise<any> {
+  const img = decoded ?? await decodePng(filePath);
   const { width: w, height: h } = img;
   const fp = fingerprint(filePath, w, h);
   const ts = detectTileSize(img);
@@ -291,8 +291,8 @@ export async function registerTileset(
   const graphicsDir = join(projectPath, 'Graphics', 'Tilesets');
   const file = contained(graphicsDir, join(graphicsDir, args.graphicName.replace(/\.[^.]+$/, '') + '.png'));
 
-  let verdict: any;
-  try { verdict = await classifyAsset(file); }
+  let verdict: any, img: Canvas;
+  try { img = await decodePng(file, true); verdict = await classifyAsset(file, img); }
   catch (e) { return { ok: false, error: `cannot read graphic: ${file} (${e})` }; }
 
   if (!verdict.rmxp_native && !args.force) {
@@ -306,8 +306,7 @@ export async function registerTileset(
     };
   }
 
-  const img = await decodePng(file);
-  if (img.width !== 256) {
+  if (img.width !== 256 || img.height % 32 !== 0 || 384 + img.height / 4 > 32768) {
     return { ok: false, blocked: true, reason: `tileset width is ${img.width}px; RMXP expects 256px.`, classify: verdict };
   }
   const xsize = 384 + (img.height / 4); // 384 autotile region + 8*(height/32) regular tiles

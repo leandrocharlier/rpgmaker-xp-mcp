@@ -35,7 +35,7 @@ export async function cloneTileset(project: string, sourceTilesetId: number, opt
     const rtp = process.env.RPGMAKER_RTP_PATH || 'C:/Program Files (x86)/Steam/steamapps/common/RPGXP/rtp';
     const graphic = resolveGraphic(project, rtp, 'Tilesets', options.graphicName);
     if (!graphic) throw new Error('Replacement tileset graphic not found');
-    const image = await decodePng(graphic);
+    const image = await decodePng(graphic, true);
     if (image.width !== 256 || image.height % 32 !== 0) throw new Error('Tileset PNG must be 256 pixels wide with a height divisible by 32');
     const newSize = 384 + image.height / 4;
     if (newSize < size || newSize > 32768) throw new Error('Replacement graphic cannot shrink property tables or exceed tile ID limits');

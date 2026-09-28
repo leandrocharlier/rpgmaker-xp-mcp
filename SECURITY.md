@@ -82,6 +82,7 @@ node test/table-budgets-mcp.mjs
 node test/import-plan-mcp.mjs
 node test/rename-retry.mjs
 node test/tileset-truncate-mcp.mjs
+node test/tall-tilesets.mjs
 node test/essentials-strings.mjs
 node test/tools.mjs
 node test/essentials-mcp.mjs <essentials-project>
@@ -96,6 +97,30 @@ before each forward rename attempt, including retries. Unreadable or changed
 dependencies abort the write. These checks cover stored map tileset IDs, not
 references computed by game scripts, and cannot eliminate external filesystem
 races after the final check. Graphics and maps are never deleted by this tool.
+
+## Opt-in tall XP tilesets
+
+Set `RPGMAKER_ALLOW_TALL_XP_TILESETS=1` in the MCP process environment to enable
+tall tilesets. Restart the process after changing it. The default remains
+16 megapixels for all images. With the option enabled, tileset-specific readers
+and atlas composition accept width 256, height divisible by 32, and height at
+most 129,536 (tile ID 32,767), below the 32-megapixel ceiling. General images,
+character/autotile readers, and preview output keep their original limit.
+
+Compose and import-plan pixel rectangles may then have height up to 129,536;
+map dimensions remain capped at 500 tiles. Source bounds, packing, scale, and
+tile-ID checks still apply. Use scale 1 for full-height strips. PNG dimensions
+are checked before inflation, and actual decoded images are charged against
+a 32-megapixel aggregate budget per project operation, including repeated reads.
+Composition's existing source budget is retained. Encoded files remain capped
+at 64 MiB, staged writes/recovery at 128 MiB, and Tables at 32 MiB.
+
+This is a pixel-work budget, not a total process-memory limit: PNG codec buffers,
+RGBA canvases, crops, and staged output coexist. One maximum-size RGBA buffer is
+126.5 MiB. Large render sources are not retained in the shared 64 MiB image cache.
+Render a map region or use paginated identification catalogs; a full labeled atlas
+may exceed the unchanged preview budget. This option does not certify runtime
+compatibility or implement a merge that preserves appended flags and references.
 
 ## Compact numeric tables
 
