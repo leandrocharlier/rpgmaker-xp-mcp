@@ -247,6 +247,8 @@ Maps live in `Data/MapXXX.rxdata`. `get_map` summarises the tile Table unless
 `compose_tileset_atlas` packs reviewed local PNG rectangles into an XP sheet,
 optionally appending to a cloned tileset while preserving existing pixels and
 flags. It exports a source-to-tile-ID manifest and does not infer collisions.
+`plan_tileset_import` estimates layout, tile IDs, RGBA memory and bank count
+without writing, keeping each contiguous object group in one bank.
 `update_tile_properties` edits passage, priority, or terrain tags by tile IDs or
 inclusive ranges. `set_map_tileset` assigns the result to one map, preserving
 tiles and events. See [isolated tileset edits](EXAMPLES.md#isolated-tileset-edits).

@@ -29,6 +29,7 @@ import * as importVerifyTools from './tools/importVerifyTools.js';
 import * as guideTools from './tools/guideTools.js';
 import * as tilesetTools from './tools/tilesetTools.js';
 import { composeTilesetAtlas } from './tools/atlasComposeTools.js';
+import { planTilesetImport } from './tools/importPlanTools.js';
 
 /**
  * RPG Maker XP MCP Server
@@ -128,7 +129,7 @@ class RPGMakerXPServer {
         if (!validate) throw new Error('Unknown tool');
         const checked = validate(args);
         if (!checked.valid) throw new Error(`Invalid arguments: ${checked.errorMessage}`);
-        const mutates = !/^(get_|search_|validate_|classify_)/.test(request.params.name);
+        const mutates = !/^(get_|search_|validate_|classify_|plan_)/.test(request.params.name);
         return await runProjectOperation(this.projectPath, process.env.RPGMAKER_RTP_PATH || 'C:/Program Files (x86)/Steam/steamapps/common/RPGXP/rtp', mutates,
           () => this.handleToolCall(request.params.name, args));
       } catch (error) {
@@ -767,6 +768,19 @@ class RPGMakerXPServer {
 
       // Database Tools (Classes, States, Enemies, Troops, CommonEvents, Tilesets, ...)
       {
+        name: 'plan_tileset_import',
+        annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+        description: 'Read-only deterministic bank planning for explicit PNG rectangles with the same shelf packing as compose_tileset_atlas. Repeats a base prefix in every bank. Optional contiguous objectId groups never split across banks; rejects indivisible objects that cannot fit. Estimates rows, tile IDs and RGBA memory from PNG headers; does not classify assets or fully validate/decode PNG contents. No locks or files are written.',
+        inputSchema: { type:'object', properties: {
+          baseTilesetId:{type:'integer'},
+          pieces:{type:'array',minItems:1,maxItems:4096,items:{type:'object',additionalProperties:false,properties:{
+            sourcePath:{type:'string'},objectId:{type:'string',minLength:1,maxLength:128,description:'All pieces of this object must be consecutive in the input.'},
+            rect:{type:'object',additionalProperties:false,properties:{x:{type:'integer',minimum:0},y:{type:'integer',minimum:0},width:{type:'integer',minimum:1,maximum:500},height:{type:'integer',minimum:1,maximum:500}},required:['x','y','width','height']},
+            scale:{type:'integer',minimum:1,maximum:8},padding:{type:'integer',minimum:0,maximum:32},
+          },required:['sourcePath','rect']}},
+        },required:['baseTilesetId','pieces']},
+      },
+      {
         name: 'compose_tileset_atlas',
         description: 'Compose an XP PNG atlas from explicit reviewed local PNG rectangles. Packs in input order on 32px tile boundaries, nearest-neighbor integer scaling and transparent padding. Writes a source-to-tile-ID manifest. Optional appendToTilesetId preserves its original pixels/IDs/flags and updates only that record to the new graphic; clone first to isolate other maps. Does not infer collisions, edit maps, or overwrite an existing output.',
         inputSchema: { type: 'object', properties: {
@@ -1280,6 +1294,8 @@ class RPGMakerXPServer {
         return await mapTools.scatterTiles(this.projectPath, args.mapId, args.layer, args.tileIds, args.region, { density: args.density, seed: args.seed, avoidOccupied: args.avoidOccupied, focal: args.focal });
 
       // Database Tools
+      case 'plan_tileset_import':
+        return await planTilesetImport(this.projectPath,args);
       case 'compose_tileset_atlas':
         return await composeTilesetAtlas(this.projectPath, args);
       case 'clone_tileset':

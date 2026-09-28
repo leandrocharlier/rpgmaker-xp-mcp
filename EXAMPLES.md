@@ -224,6 +224,55 @@ sprite or insert Ruby code. Positions must be inside the map. For advanced
 events, `create_map_event.pages` accepts complete page objects with condition,
 graphic, move route, behavior flags, trigger, and command list.
 
+### Planning a collection without writes
+
+Call `plan_tileset_import` before importing a large collection:
+
+```json
+{
+  "baseTilesetId": 1,
+  "pieces": [
+    { "objectId": "cabinet", "sourcePath": "imports/furniture.png", "rect": { "x": 0, "y": 0, "width": 32, "height": 48 }, "scale": 2 },
+    { "objectId": "cabinet", "sourcePath": "imports/furniture.png", "rect": { "x": 32, "y": 0, "width": 16, "height": 16 }, "scale": 2 },
+    { "sourcePath": "imports/decor.png", "rect": { "x": 0, "y": 0, "width": 16, "height": 16 }, "padding": 2 }
+  ]
+}
+```
+
+The planner reads the base record and PNG headers only. It creates no files,
+directories, backups or write lock, and works while a cooperative write lock
+exists. It does not classify assets, infer rectangles, or change the project.
+Planning during concurrent external edits can become stale: recheck before use.
+
+Supply up to 4096 explicit pieces. Contiguous pieces with the same `objectId`
+form an indivisible group; repeated noncontiguous groups are rejected. Without
+`objectId`, each piece is indivisible. The planner preserves input order, uses
+the compositor's deterministic shelf rules, and starts another bank if image,
+decoded-source, or 128-piece limits would be exceeded. A group that cannot fit
+by itself produces an error naming that group. This is not an optimal packing
+solver and does not reconstruct an object's relative geometry automatically.
+
+Each bank repeats the original base prefix and reserved table rows. Results
+include pixel height, row count, table size, maximum tile ID, RGBA memory
+estimates, source index/path/rectangle, output and padded tile rectangles, and
+compact tile-ID grids (`first`, `last`, `rows`, `cols`, `row_stride: 8`). IDs may
+repeat between banks because they belong to separate tilesets. The pieces are
+covered exactly once across banks, and an object never crosses banks.
+
+Clone the **original base separately for every bank**, then pass that bank's
+`compose_pieces` to `compose_tileset_atlas` with the clone ID and a fresh output
+name. Do not append bank two to bank one's result. The planner reserves no new
+database IDs and assigns no maps.
+
+Limits remain 16MP per image, 32MP decoded-source work per composition, tile IDs
+through 32767, and existing file/transaction budgets. Planning has a 128 MiB
+unique-PNG read budget. It also rejects plans whose projected property tables
+would exceed the 32 MiB compact Table budget. The generic one-million-node
+budget remains in effect for other structures. Memory estimates
+cover RGBA buffers, not total RAM, codec buffers, or compressed PNG size. PNG
+contents, exact serialized sizes and all normal write limits are validated
+when composition runs, so a plan is not a guarantee that every later write fits.
+
 ### Composing an XP atlas from reviewed PNG rectangles
 
 Use `compose_tileset_atlas` for local PNG packs that are not already XP sheets:
