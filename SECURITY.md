@@ -70,12 +70,30 @@ node test/npc-mcp.mjs
 node test/tileset-edit-mcp.mjs
 node test/catalog-pages-mcp.mjs
 node test/atlas-compose-mcp.mjs
+node test/table-budgets-mcp.mjs
 node test/essentials-strings.mjs
 node test/tools.mjs
 node test/essentials-mcp.mjs <essentials-project>
 ```
 
 The last command only reads the Essentials project and round-trips maps in memory.
+
+## Compact numeric tables
+
+RGSS `Table` values use a specialized validation budget rather than charging
+every numeric cell as a generic object node. Dimensions must be consistent
+with a 1D/2D/3D table, each table has at most one million cells, and each cell
+must be an integer in -32768..32767. Aggregate Table payloads are limited to
+32 MiB (20-byte header plus two bytes per cell), counting every occurrence,
+including shared references. This bounds expanded numeric storage to roughly
+128 MiB of eight-byte numeric slots, excluding runtime/container overhead.
+The decoder checks the byte budget before allocating the next table.
+
+Arbitrary arrays and objects still have the original one-million-node and
+depth limits; text, PNG, input-line, file, transaction and recovery budgets
+are unchanged. Malformed table data cannot use the specialized numeric path.
+This permits large collections of valid XP tileset flags without treating
+millions of compact integers as millions of arbitrary objects.
 
 ## Client and game execution trust
 

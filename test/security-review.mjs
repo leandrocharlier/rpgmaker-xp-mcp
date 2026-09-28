@@ -12,6 +12,7 @@ import { validateAssets } from '../dist/tools/assetTools.js';
 import { writeRxdataFile, toPlain, toRuby } from '../dist/utils/rxdata.js';
 import { runProjectOperation, checkValue, boundedStdioInput } from '../dist/utils/security.js';
 import { blobCells, pathCells } from '../dist/tools/mapTools.js';
+import { MAX_TABLE_BYTES } from '../dist/utils/tableValidation.js';
 
 const root = await mkdtemp(join(tmpdir(), 'mcp-review-'));
 const project = join(root, 'project');
@@ -101,7 +102,7 @@ await test('Repeated strings cannot expand into unbounded JSON', async () => {
   assert.throws(() => toPlain(repeated), /expanded text/);
   assert.throws(() => checkValue(repeated), /Aggregate text/);
   const table = toRuby({ _class: 'Table', dim: 1, xsize: 100000, ysize: 1, zsize: 1, data: Array(100000).fill(0) });
-  assert.throws(() => toPlain(Array(20).fill(table)), /expanded Table/);
+  assert.throws(() => toPlain([table], 0, { nodes: 0, text: 0, tableBytes: MAX_TABLE_BYTES }), /Expanded Table/);
 });
 await test('Transport limits fragmented lines and permits separate messages', async () => {
   const stream = boundedStdioInput(16); stream.resume();

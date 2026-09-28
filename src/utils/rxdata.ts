@@ -1,5 +1,6 @@
 import { readLimited as readFile, atomicWriteFile as writeFile, checkValue } from './security.js';
 import { load, dump, RubyObject } from '../vendor/marshal/index.js';
+import { tableShape, validatePlainTable, chargeTable } from './tableValidation.js';
 
 /**
  * Ruby Marshal <-> plain JSON conversion layer for RPG Maker XP (.rxdata).
@@ -33,14 +34,16 @@ export interface PlainTable {
   data: number[];
 }
 
-function decodeTable(bytes: Uint8Array): PlainTable {
+function decodeTable(bytes: Uint8Array, budget: { tableBytes?: number }): PlainTable {
+  if (bytes.length < 20) throw new Error('Truncated Table header');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const dim = view.getUint32(0, true);
   const xsize = view.getUint32(4, true);
   const ysize = view.getUint32(8, true);
   const zsize = view.getUint32(12, true);
   const items = view.getUint32(16, true);
-  if (items > 1000000 || bytes.length !== 20 + items * 2 || xsize * ysize * zsize !== items) throw new Error('Invalid or oversized Table');
+  if (tableShape({dim,xsize,ysize,zsize}) !== items || bytes.length !== 20 + items * 2) throw new Error('Invalid or oversized Table');
+  chargeTable(items, budget); // Before allocation, including aliased Marshal tables.
   const data: number[] = new Array(items);
   for (let i = 0; i < items; i++) {
     data[i] = view.getInt16(20 + i * 2, true);
@@ -49,7 +52,7 @@ function decodeTable(bytes: Uint8Array): PlainTable {
 }
 
 function encodeTable(table: PlainTable): RubyObject {
-  const items = table.xsize * table.ysize * table.zsize;
+  const items = validatePlainTable(table);
   if (table.data.length !== items) {
     throw new Error(
       `Table data length ${table.data.length} does not match xsize*ysize*zsize=${items}`
@@ -105,7 +108,7 @@ function encodeColorTone(value: PlainColorTone): RubyObject {
 // Generic conversion
 // ---------------------------------------------------------------------------
 
-export function toPlain(value: unknown, depth = 0, budget = { nodes: 0, text: 0 }): any {
+export function toPlain(value: unknown, depth = 0, budget = { nodes: 0, text: 0, tableBytes: 0 }): any {
   if (depth > 64 || ++budget.nodes > 1000000) throw new Error('Marshal conversion exceeds safety limits');
   const convert = (v: unknown) => toPlain(v, depth + 1, budget);
   const text = (v: string) => {
@@ -147,10 +150,7 @@ export function toPlain(value: unknown, depth = 0, budget = { nodes: 0, text: 0 
     text(className);
     if (value.userDefined) {
       if (className === 'Table') {
-        const table = decodeTable(value.userDefined);
-        budget.nodes += table.data.length;
-        if (budget.nodes > 1000000) throw new Error('Marshal expanded Table exceeds safety limits');
-        return table;
+        return decodeTable(value.userDefined, budget);
       }
       if (className === 'Color' || className === 'Tone') {
         return decodeColorTone(className, value.userDefined);

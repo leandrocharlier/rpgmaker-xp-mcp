@@ -4,6 +4,7 @@ import { open, rename, unlink, mkdir, copyFile } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, dirname, join, basename } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { Transform } from 'node:stream';
+import { chargeTable, validatePlainTable } from './tableValidation.js';
 
 export const MAX_FILE = 64 * 1024 * 1024;
 const MAX_TRANSACTION = 128 * 1024 * 1024;
@@ -181,7 +182,7 @@ export function runProjectOperation<T>(project: string, rtp: string | undefined,
   return task;
 }
 
-export function checkValue(value: unknown, depth = 0, budget = { nodes: 0, text: 0 }): void {
+export function checkValue(value: unknown, depth = 0, budget = { nodes: 0, text: 0, tableBytes: 0 }): void {
   if (depth > 64 || ++budget.nodes > 1000000) throw new Error('Input structure exceeds safety limits');
   if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('Numbers must be finite');
   if (typeof value === 'string' && value.length > 4 * 1024 * 1024) throw new Error('String exceeds safety limit');
@@ -189,11 +190,13 @@ export function checkValue(value: unknown, depth = 0, budget = { nodes: 0, text:
     budget.text += value.length;
     if (budget.text > 16 * 1024 * 1024) throw new Error('Aggregate text exceeds safety limits');
   }
+  const table = value && typeof value === 'object' && (value as any)._class === 'Table' && Array.isArray((value as any).data);
+  if (table) chargeTable(validatePlainTable(value), budget);
   if (value && typeof value === 'object') for (const [key, child] of Object.entries(value)) {
     if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Unsafe property name');
     budget.text += key.length;
     if (budget.text > 16 * 1024 * 1024) throw new Error('Aggregate text exceeds safety limits');
-    checkValue(child, depth + 1, budget);
+    if (!(table && key === 'data')) checkValue(child, depth + 1, budget);
   }
 }
 
