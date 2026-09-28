@@ -194,7 +194,11 @@ const read_any = (p: Loader): unknown => {
       return p.objects_[read_fixnum(p)];
 
     case constants.T_IVAR:
-      for (var o = read_any(p), n = read_fixnum(p), i = 0, k, v; i < n; ++i) {
+      var o = read_any(p);
+      // An encoding name can itself add objects while reading the ivars.
+      // Keep the wrapped object's index, rather than updating the last object.
+      var wrappedIndex = p.objects_.lastIndexOf(o);
+      for (var n = read_fixnum(p), i = 0, k, v; i < n; ++i) {
         k = read_any(p);
         v = read_any(p);
         // if a string (read as uint8array) has ivar :E or :encoding, decode it
@@ -204,13 +208,13 @@ const read_any = (p: Loader): unknown => {
           string !== "binary"
         ) {
           if (k === constants._E) o = decode(o);
-          else o = new TextDecoder(decode(v as Uint8Array)).decode(o);
-          p.objects_[p.objects_.length - 1] = o;
+          else o = new TextDecoder(typeof v === "string" ? v : decode(v as Uint8Array)).decode(o);
+          if (wrappedIndex >= 0) p.objects_[wrappedIndex] = o;
         }
         // otherwise try to put the ivar
-        else if (o != null) {
-          // primitives (boolean, number, string, symbol, ...) cannot hold properties,
-          // so code below silently fail. other objects get a [Symbol(@key)] property
+        else if (o != null && (typeof o === "object" || typeof o === "function")) {
+          // Forced UTF-8 strings are already decoded primitives. Their
+          // encoding ivars must not be assigned as JavaScript properties.
           ivar_set(o, k, v, ivar2str);
         }
       }
