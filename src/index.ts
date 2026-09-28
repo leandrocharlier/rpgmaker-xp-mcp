@@ -27,6 +27,7 @@ import * as tilesetCatalogTools from './tools/tilesetCatalogTools.js';
 import * as assetTools from './tools/assetTools.js';
 import * as importVerifyTools from './tools/importVerifyTools.js';
 import * as guideTools from './tools/guideTools.js';
+import * as tilesetTools from './tools/tilesetTools.js';
 
 /**
  * RPG Maker XP MCP Server
@@ -765,6 +766,30 @@ class RPGMakerXPServer {
 
       // Database Tools (Classes, States, Enemies, Troops, CommonEvents, Tilesets, ...)
       {
+        name: 'clone_tileset',
+        description: 'Clone a tileset record preserving all property tables and other settings. Does not assign maps or copy image files. Optional existing graphicName must be a 256px-wide PNG of equal or greater table capacity; added tiles receive zero flags.',
+        inputSchema: { type: 'object', properties: {
+          sourceTilesetId: { type: 'integer' }, name: { type: 'string', minLength: 1 }, graphicName: { type: 'string', minLength: 1 },
+        }, required: ['sourceTilesetId'] },
+      },
+      {
+        name: 'update_tile_properties',
+        description: 'Update only selected tiles in one tileset. Select tileIds and/or inclusive ranges (their union); provide at least one property. passage replaces the complete XP bitmask (0..255), priority is 0..5, terrainTag is a numeric tag (0..32767), with no game-specific interpretation. Other tiles and records stay unchanged.',
+        inputSchema: { type: 'object', properties: {
+          tilesetId: { type: 'integer' },
+          tileIds: { type: 'array', maxItems: 32768, items: { type: 'integer', minimum: 0, maximum: 32767 } },
+          ranges: { type: 'array', maxItems: 1024, items: { type: 'object', additionalProperties: false, properties: {
+            start: { type: 'integer', minimum: 0, maximum: 32767 }, end: { type: 'integer', minimum: 0, maximum: 32767 },
+          }, required: ['start', 'end'] } },
+          passage: { type: 'integer', minimum: 0, maximum: 255 }, priority: { type: 'integer', minimum: 0, maximum: 5 }, terrainTag: { type: 'integer', minimum: 0, maximum: 32767 },
+        }, required: ['tilesetId'] },
+      },
+      {
+        name: 'set_map_tileset',
+        description: 'Assign an existing tileset to a map without changing tiles or events. Rejects map/event tile IDs outside the destination tables. Saves map and system revision transactionally. Tile meanings and autotile graphics must be compatible; IDs are not remapped.',
+        inputSchema: { type: 'object', properties: { mapId: { type: 'integer' }, tilesetId: { type: 'integer' } }, required: ['mapId', 'tilesetId'] },
+      },
+      {
         name: 'get_database',
         description: 'List all entries of a database file. Kinds: classes, states, enemies, troops, common_events, tilesets, animations (also actors/skills/items/weapons/armors). Tables and command lists are summarized; use get_database_entry for full data.',
         inputSchema: {
@@ -1239,6 +1264,12 @@ class RPGMakerXPServer {
         return await mapTools.scatterTiles(this.projectPath, args.mapId, args.layer, args.tileIds, args.region, { density: args.density, seed: args.seed, avoidOccupied: args.avoidOccupied, focal: args.focal });
 
       // Database Tools
+      case 'clone_tileset':
+        return await tilesetTools.cloneTileset(this.projectPath, args.sourceTilesetId, args);
+      case 'update_tile_properties':
+        return await tilesetTools.updateTileProperties(this.projectPath, args.tilesetId, args);
+      case 'set_map_tileset':
+        return await tilesetTools.setMapTileset(this.projectPath, args.mapId, args.tilesetId);
       case 'get_database':
         return await databaseTools.getDatabase(this.projectPath, args.kind);
       case 'get_database_entry':

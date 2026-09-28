@@ -224,6 +224,49 @@ sprite or insert Ruby code. Positions must be inside the map. For advanced
 events, `create_map_event.pages` accepts complete page objects with condition,
 graphic, move route, behavior flags, trigger, and command list.
 
+### Isolated tileset edits
+
+To change one map without changing others that share its tileset, call
+`clone_tileset` first:
+
+```json
+{ "sourceTilesetId": 1, "name": "Village variant", "graphicName": "village_extended" }
+```
+
+`graphicName` is optional. It references an existing PNG in the project or RTP;
+the tool does not copy or draw images. A replacement must be 256 pixels wide,
+its height divisible by 32, and its table capacity at least that of the source.
+Existing flags, autotile names, and other settings are preserved. Additional
+regular tiles start with zero passage, priority, and terrain values. Arrange
+the new sheet so existing tile IDs retain their intended meaning.
+
+Use the returned ID as `tilesetId` in subsequent calls. For example, if the
+returned ID is 3, call `update_tile_properties`:
+
+```json
+{ "tilesetId": 3, "tileIds": [384], "ranges": [{ "start": 392, "end": 399 }], "passage": 15, "priority": 1 }
+```
+
+IDs and inclusive ranges are combined without duplicate updates. Omitted
+properties stay unchanged. `passage` replaces the complete XP bitmask (0..255),
+`priority` is 0..5, and `terrainTag` is a raw nonnegative signed-16-bit value
+(0..32767). The MCP does not assign game-specific meanings to terrain tags.
+Regular tiles begin at 384; each sheet row spans eight IDs. Updating a tileset
+affects every map using that record, which is why cloning comes first.
+
+Finally call `set_map_tileset`:
+
+```json
+{ "mapId": 1, "tilesetId": 3 }
+```
+
+This changes only the map's tileset reference and the system revision. It
+rejects map or event graphic tile IDs beyond the destination table size, but
+does not remap IDs or verify their visual meaning. Other maps, events, and
+tiles remain unchanged. Each call is transactional and backed up; the entire
+three-call workflow is not one transaction. Assign last, then preview the map.
+Keep the project closed during writes and reopen it afterward.
+
 ### Finding events
 
 > *"Which events on map 3 mention the ferry?"* — `search_map_events`

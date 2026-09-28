@@ -66,6 +66,8 @@ npm run build
 node test/security-audit.mjs <existing-scratch-parent>
 node test/security-files.mjs <existing-scratch-parent>
 node test/security-review.mjs
+node test/npc-mcp.mjs
+node test/tileset-edit-mcp.mjs
 node test/essentials-strings.mjs
 node test/tools.mjs
 node test/essentials-mcp.mjs <essentials-project>

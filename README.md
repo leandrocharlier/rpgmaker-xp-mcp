@@ -243,6 +243,11 @@ Scope: 0=none, 1=one enemy, 2=all enemies, 3=one ally, 4=all allies,
 Maps live in `Data/MapXXX.rxdata`. `get_map` summarises the tile Table unless
 `includeTiles: true`. Events are a hash keyed by event ID.
 
+`clone_tileset` duplicates a tileset and its flags without changing any map.
+`update_tile_properties` edits passage, priority, or terrain tags by tile IDs or
+inclusive ranges. `set_map_tileset` assigns the result to one map, preserving
+tiles and events. See [isolated tileset edits](EXAMPLES.md#isolated-tileset-edits).
+
 `create_npc` creates a stationary action-button NPC with a sprite and messages
 in one transaction. `create_map_event.pages` accepts complete RGSS page objects;
 omit it for an empty default page. See [NPC examples](EXAMPLES.md#a-new-npc).
