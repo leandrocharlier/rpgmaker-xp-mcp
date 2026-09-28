@@ -15,6 +15,28 @@ These proposals are not implemented or advertised as available tools.
 Neither proposal should change the conservative suffix-only behavior of
 `truncate_unused_tilesets`.
 
+## Source scale and visual import review
+
+Add explicit review evidence to future import manifests: source grid size
+(for example 16 or 32 pixels, or unknown), confirmed scale, nearest-neighbor
+conversion, reviewer status, and the evidence supporting each decision.
+Classify pieces explicitly as modular tile, object, example scene, credits, or
+unreviewed. Successful PNG loading, a 256-pixel canvas width, gutter-based
+extraction, and successful runtime rendering do not establish visual suitability.
+Do not automatically accept or normalize an unknown grid or scale.
+
+Provide contact sheets comparing original and proposed pieces against a 32-pixel
+grid and a neutral 32-by-48-pixel human reference. Exact integer-upscale detection
+may provide a clue, but must not assign semantic types or approve scale on its own.
+Keep review evidence tied to the source and crop so derived pieces retain their
+provenance. Changes to crop or scale should invalidate the affected review.
+
+Synthetic acceptance fixtures should include a miniature complete room that must
+remain unreviewed or be marked as an example scene, a confirmed 16-pixel modular
+source enlarged 2x with nearest-neighbor, native 32-pixel art kept at 1x, and a
+credit panel excluded from playable tile candidates. These are proposed curation
+checks, not a reported defect in `compose_tileset_atlas` or an implemented gate.
+
 ## Character sheets
 
 - Read-only inspection of explicit XP 4-by-4 character sheets: per-frame and
