@@ -28,6 +28,7 @@ import * as assetTools from './tools/assetTools.js';
 import * as importVerifyTools from './tools/importVerifyTools.js';
 import * as guideTools from './tools/guideTools.js';
 import * as tilesetTools from './tools/tilesetTools.js';
+import { composeTilesetAtlas } from './tools/atlasComposeTools.js';
 
 /**
  * RPG Maker XP MCP Server
@@ -766,6 +767,19 @@ class RPGMakerXPServer {
 
       // Database Tools (Classes, States, Enemies, Troops, CommonEvents, Tilesets, ...)
       {
+        name: 'compose_tileset_atlas',
+        description: 'Compose an XP PNG atlas from explicit reviewed local PNG rectangles. Packs in input order on 32px tile boundaries, nearest-neighbor integer scaling and transparent padding. Writes a source-to-tile-ID manifest. Optional appendToTilesetId preserves its original pixels/IDs/flags and updates only that record to the new graphic; clone first to isolate other maps. Does not infer collisions, edit maps, or overwrite an existing output.',
+        inputSchema: { type: 'object', properties: {
+          outputName: { type: 'string', minLength: 1, maxLength: 80, description: 'New filename stem in Graphics/Tilesets; letters, digits, underscore and hyphen only.' },
+          appendToTilesetId: { type: 'integer' },
+          pieces: { type: 'array', minItems: 1, maxItems: 128, items: { type: 'object', additionalProperties: false, properties: {
+            sourcePath: { type: 'string', description: 'Local PNG within project or configured RTP; relative paths resolve from project root.' },
+            rect: { type: 'object', additionalProperties: false, properties: { x: { type: 'integer', minimum: 0 }, y: { type: 'integer', minimum: 0 }, width: { type: 'integer', minimum: 1, maximum: 500 }, height: { type: 'integer', minimum: 1, maximum: 500 } }, required: ['x','y','width','height'] },
+            scale: { type: 'integer', minimum: 1, maximum: 8 }, padding: { type: 'integer', minimum: 0, maximum: 32, description: 'Transparent pixels on all sides before rounding each slot up to 32px.' },
+          }, required: ['sourcePath','rect'] } },
+        }, required: ['outputName','pieces'] },
+      },
+      {
         name: 'clone_tileset',
         description: 'Clone a tileset record preserving all property tables and other settings. Does not assign maps or copy image files. Optional existing graphicName must be a 256px-wide PNG of equal or greater table capacity; added tiles receive zero flags.',
         inputSchema: { type: 'object', properties: {
@@ -1266,6 +1280,8 @@ class RPGMakerXPServer {
         return await mapTools.scatterTiles(this.projectPath, args.mapId, args.layer, args.tileIds, args.region, { density: args.density, seed: args.seed, avoidOccupied: args.avoidOccupied, focal: args.focal });
 
       // Database Tools
+      case 'compose_tileset_atlas':
+        return await composeTilesetAtlas(this.projectPath, args);
       case 'clone_tileset':
         return await tilesetTools.cloneTileset(this.projectPath, args.sourceTilesetId, args);
       case 'update_tile_properties':

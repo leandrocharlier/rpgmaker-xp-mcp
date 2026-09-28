@@ -69,6 +69,7 @@ node test/security-review.mjs
 node test/npc-mcp.mjs
 node test/tileset-edit-mcp.mjs
 node test/catalog-pages-mcp.mjs
+node test/atlas-compose-mcp.mjs
 node test/essentials-strings.mjs
 node test/tools.mjs
 node test/essentials-mcp.mjs <essentials-project>

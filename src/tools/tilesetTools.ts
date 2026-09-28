@@ -5,7 +5,7 @@ import { touchMagicNumber } from './systemTools.js';
 import type { GameMap } from '../utils/types.js';
 
 const fields = ['passages', 'priorities', 'terrain_tags'] as const;
-async function load(project: string, id: number) {
+export async function loadTilesetRecord(project: string, id: number) {
   assertId(id);
   const path = getDataPath(project, 'Tilesets.rxdata');
   const entries = await readRxdataFile<any[]>(path);
@@ -24,7 +24,7 @@ async function load(project: string, id: number) {
 
 /** Cloning never changes the source or assigns the clone to a map. */
 export async function cloneTileset(project: string, sourceTilesetId: number, options: { name?: string; graphicName?: string }) {
-  const { path, entries, tileset, size } = await load(project, sourceTilesetId);
+  const { path, entries, tileset, size } = await loadTilesetRecord(project, sourceTilesetId);
   const clone = structuredClone(tileset);
   const id = entries.length;
   assertId(id);
@@ -54,7 +54,7 @@ export async function updateTileProperties(project: string, tilesetId: number, o
   tileIds?: number[]; ranges?: { start: number; end: number }[];
   passage?: number; priority?: number; terrainTag?: number;
 }) {
-  const { path, entries, tileset, size } = await load(project, tilesetId);
+  const { path, entries, tileset, size } = await loadTilesetRecord(project, tilesetId);
   const changes = [['passages', options.passage, 255], ['priorities', options.priority, 5], ['terrain_tags', options.terrainTag, 32767]] as const;
   if (changes.every(([, value]) => value === undefined)) throw new Error('At least one tile property is required');
   for (const [, value, max] of changes) if (value !== undefined && (!Number.isInteger(value) || value < 0 || value > max)) throw new Error('Tile property outside supported range');
@@ -77,7 +77,7 @@ export async function updateTileProperties(project: string, tilesetId: number, o
 }
 
 export async function setMapTileset(project: string, mapId: number, tilesetId: number) {
-  const { size } = await load(project, tilesetId);
+  const { size } = await loadTilesetRecord(project, tilesetId);
   const path = getMapPath(project, mapId);
   const map = await readRxdataFile<GameMap>(path);
   const valid = (id: number) => Number.isInteger(id) && id >= 0 && id < size;

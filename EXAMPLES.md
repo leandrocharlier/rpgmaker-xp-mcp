@@ -224,6 +224,51 @@ sprite or insert Ruby code. Positions must be inside the map. For advanced
 events, `create_map_event.pages` accepts complete page objects with condition,
 graphic, move route, behavior flags, trigger, and command list.
 
+### Composing an XP atlas from reviewed PNG rectangles
+
+Use `compose_tileset_atlas` for local PNG packs that are not already XP sheets:
+
+```json
+{
+  "outputName": "furniture_variant",
+  "appendToTilesetId": 3,
+  "pieces": [
+    { "sourcePath": "imports/furniture.png", "rect": { "x": 32, "y": 16, "width": 32, "height": 48 }, "scale": 2 },
+    { "sourcePath": "imports/decor.png", "rect": { "x": 8, "y": 8, "width": 17, "height": 19 }, "padding": 3 }
+  ]
+}
+```
+
+Clone the tileset first and pass its returned ID as `appendToTilesetId` to keep
+shared maps isolated. Omit that argument to generate a standalone atlas without
+changing the database. The new PNG is written under `Graphics/Tilesets` and its
+manifest under `Data/.mcp-atlas`. Existing destinations are rejected.
+
+Pieces pack left-to-right in input order on 32px boundaries, starting a new
+shelf when necessary. Each slot rounds up to whole tiles; unused space is fully
+transparent. `padding` adds 0..32 transparent pixels on each side. `scale` is
+integer 1..8 with nearest-neighbor sampling, preserving RGBA bytes. Explicit
+rectangles must fit their sources; the MCP accepts up to 128 pieces, with each
+source rectangle up to 500px per dimension. Scaled width plus padding must fit
+256px. Source images may be larger and can have arbitrary dimensions within
+the existing 16-megapixel limit. PNG is the supported input format.
+
+Relative paths resolve from the project root; all inputs must be inside the
+project or configured RTP. Output is always 256px wide with height divisible
+by 32. The manifest maps each source path/rectangle to its scale, output pixel
+rectangle, padded tile rectangle, and 2D grid of global tile IDs. IDs include
+transparent padding. Packing is deterministic for the same ordered inputs.
+
+When appending, existing source pixels and flags are preserved; the original
+PNG remains unchanged. Reserved property-table rows remain reserved. Only the
+chosen record points to the new image and receives zero-filled extra property
+entries. Zero is a placeholder, not a collision assessment: review all new
+passages, priorities and terrain tags with `update_tile_properties`. No maps
+are assigned automatically. PNG, manifest and record changes share one staged
+transaction with rollback and database backups. The normal 64 MiB file and
+128 MiB transaction limits apply, as do a 16-megapixel output limit and a
+32-megapixel aggregate decode budget counting each piece's source and prefix.
+
 ### Isolated tileset edits
 
 To change one map without changing others that share its tileset, call
