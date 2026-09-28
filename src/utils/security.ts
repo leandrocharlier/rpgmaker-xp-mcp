@@ -9,7 +9,7 @@ import { chargeTable, validatePlainTable } from './tableValidation.js';
 
 export const MAX_FILE = 64 * 1024 * 1024;
 const MAX_TRANSACTION = 128 * 1024 * 1024;
-type State = { project: string; rtp?: string; observed: Map<string, string>; writes: Map<string, Buffer>; guards: Array<() => Promise<void>>; decodedPixels: number; canWrite: boolean };
+type State = { project: string; rtp?: string; observed: Map<string, string>; writes: Map<string, Buffer>; guards: Array<() => Promise<void>>; decodedPixels: number; canWrite: boolean; expectedAbsent: Set<string> };
 const scope = new AsyncLocalStorage<State>();
 let queue: Promise<unknown> = Promise.resolve();
 const digest = (b: Buffer) => createHash('sha256').update(b).digest('hex');
@@ -171,6 +171,7 @@ async function commit(state: State): Promise<void> {
       state.writes.delete(path);
       try { old = await readLimited(path); } finally { state.writes.set(path, staged); }
     } catch (e) { if (!missing(e)) throw e; }
+    if (state.expectedAbsent.has(path) && old !== null) throw new Error(`New output appeared outside this operation; refusing overwrite: ${path}`);
     const observed = state.observed.get(path);
     if (observed && (old === null || digest(old) !== observed)) throw new Error('File changed outside this operation; retry after closing the editor');
     originals.set(path, old);
@@ -201,7 +202,7 @@ async function commit(state: State): Promise<void> {
 }
 
 export function runProjectOperation<T>(project: string, rtp: string | undefined, mutates: boolean, fn: () => Promise<T>): Promise<T> {
-  const task = queue.then(() => scope.run({ project: resolve(project), rtp, observed: new Map(), writes: new Map(), guards: [], decodedPixels: 0, canWrite: mutates }, async () => {
+  const task = queue.then(() => scope.run({ project: resolve(project), rtp, observed: new Map(), writes: new Map(), guards: [], decodedPixels: 0, canWrite: mutates, expectedAbsent: new Set() }, async () => {
     const lock = contained(project, join(project, 'Data', '.mcp-write.lock'));
     let handle;
     try {
@@ -244,6 +245,17 @@ export function guardProjectReads(paths: string[]): void {
       if (!state.writes.has(path)) await assertUnchanged(path,hash);
     }
   });
+}
+
+/** Reserve absence logically; commit still uses race-detecting rename checks.
+ * This does not create a file or directory, so it is safe in previews as well.
+ */
+export async function expectNewProjectFile(path: string): Promise<void> {
+  const state = scope.getStore();
+  if (!state) throw new Error('A project transaction is required for new outputs');
+  path = allowed(path, true);
+  if (state.writes.has(path) || await currentDigest(path) !== null) throw new Error('Output already exists; choose a new filename');
+  state.expectedAbsent.add(path);
 }
 
 export function checkValue(value: unknown, depth = 0, budget = { nodes: 0, text: 0, tableBytes: 0 }): void {

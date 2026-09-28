@@ -1,6 +1,6 @@
 import { access } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { allowed, contained, safeMkdir, atomicWriteFile } from '../utils/security.js';
+import { allowed, contained, safeMkdir, atomicWriteFile, expectNewProjectFile } from '../utils/security.js';
 import { Canvas, decodePng, encodePng, makeCanvas, scaleCanvas, resolveGraphic } from '../utils/tiles.js';
 import { writeRxdataFile } from '../utils/rxdata.js';
 import { loadTilesetRecord } from './tilesetTools.js';
@@ -29,6 +29,7 @@ export async function composeTilesetAtlas(project: string, args: { outputName: s
   const outputPath = contained(project, join(imageDir, args.outputName + '.png'));
   const manifestPath = contained(project, join(manifestDir, args.outputName + '.json'));
   await requireMissing(outputPath); await requireMissing(manifestPath);
+  await expectNewProjectFile(outputPath); await expectNewProjectFile(manifestPath);
   const record = args.appendToTilesetId === undefined ? undefined : await loadTilesetRecord(project, args.appendToTilesetId);
   let prefix: Canvas | undefined, prefixPath: string | null = null, baseHeight = 0, decodedPixels = 0;
   if (record) {

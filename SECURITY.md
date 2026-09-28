@@ -89,6 +89,8 @@ node test/rename-retry.mjs
 node test/tileset-truncate-mcp.mjs
 node test/tall-tilesets.mjs
 node test/dependency-guards.mjs
+node test/tileset-transform.mjs
+node test/extensions-mcp.mjs
 node test/essentials-strings.mjs
 node test/tools.mjs
 node test/essentials-mcp.mjs <essentials-project>

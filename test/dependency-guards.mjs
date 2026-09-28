@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { atomicWriteFile, safeMkdir, runProjectOperation, readLimited, guardProjectReads } from '../dist/utils/security.js';
+import { atomicWriteFile, safeMkdir, runProjectOperation, readLimited, guardProjectReads, expectNewProjectFile } from '../dist/utils/security.js';
 
 const root = await mkdtemp(join(tmpdir(),'mcp-dependencies-'));
 await mkdir(join(root,'Data'));
@@ -31,3 +31,12 @@ console.log('PASS source changes block commit and guarded staged destinations do
 await assert.rejects(() => runProjectOperation(root,undefined,true,async()=>guardProjectReads([join(root,'unread')])), /must be read/);
 await assert.rejects(() => access(join(root,'Data','.mcp-write.lock')));
 console.log('PASS unread dependencies rejected and locks released');
+
+const fresh = join(root,'Data','new.txt');
+await assert.rejects(() => runProjectOperation(root,undefined,true,async()=>{
+  await expectNewProjectFile(fresh);
+  await atomicWriteFile(fresh,'generated');
+  await writeFile(fresh,'external-owner');
+}), /appeared outside/);
+assert.equal(await readFile(fresh,'utf8'),'external-owner');
+console.log('PASS initially absent output created externally before commit is never overwritten');

@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, readFile, unlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { makeMap, makeTable, makeMapInfo } from '../dist/utils/types.js';
+import { writeRxdataFile } from '../dist/utils/rxdata.js';
+import { makeCanvas, encodePng } from '../dist/utils/tiles.js';
+import { extensions } from '../dist/tools/extensions.js';
+
+const project=await mkdtemp(join(tmpdir(),'mcp-extensions-'));
+await mkdir(join(project,'Data')); await mkdir(join(project,'Graphics','Tilesets'),{recursive:true});
+const path=name=>join(project,'Data',name);
+await writeRxdataFile(path('System.rxdata'),{_class:'RPG::System',magic_number:1});
+await writeRxdataFile(path('Tilesets.rxdata'),[null,{_class:'RPG::Tileset',id:1,name:'Fixture',tileset_name:'source',autotile_names:Array(7).fill(''),passages:makeTable(400,1,1),priorities:makeTable(400,1,1),terrain_tags:makeTable(400,1,1)}]);
+await writeRxdataFile(path('MapInfos.rxdata'),{'1':makeMapInfo('Synthetic')});
+const map=makeMap(3,3,1);map.data.data[0]=399;
+await writeRxdataFile(path('Map001.rxdata'),map);
+await writeFile(join(project,'Graphics','Tilesets','source.png'),encodePng(makeCanvas(256,64)));
+const client=new Client({name:'extensions-test',version:'1'});
+await client.connect(new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('../dist/index.js',import.meta.url))],env:{...process.env,RPGMAKER_PROJECT_PATH:project},stderr:'pipe'}));
+try {
+  const list=await client.listTools();
+  for(const extension of extensions) assert.ok(list.tools.some(t=>t.name===extension.definition.name));
+  const args={tilesetId:1,outputName:'small',runtimeMaxHeight:32};
+  const before=await readFile(path('Tilesets.rxdata'));
+  const bad=await client.callTool({name:'compact_used_tileset',arguments:{...args,unexpected:true}});
+  assert.ok(bad.isError);assert.deepEqual(await readFile(path('Tilesets.rxdata')),before);
+  await writeFile(path('.mcp-write.lock'),'external test lock');
+  const preview=await client.callTool({name:'compact_used_tileset',arguments:args});
+  assert.ok(!preview.isError,JSON.stringify(preview));const plan=JSON.parse(preview.content[0].text);
+  const apply={...args,dryRun:false,reviewedPlanHash:plan.planHash,acknowledgeDynamicReferences:true};
+  assert.ok((await client.callTool({name:'compact_used_tileset',arguments:apply})).isError);
+  await unlink(path('.mcp-write.lock'));
+  const result=await client.callTool({name:'compact_used_tileset',arguments:apply});
+  assert.ok(!result.isError,JSON.stringify(result));
+  console.log('PASS SDK extension discovery/schema rejection, lock-free dry-run, locked apply and reviewed transform');
+} finally { await client.close(); }
+console.log(`Synthetic fixtures: ${project}`);

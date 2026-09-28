@@ -1,6 +1,14 @@
-# Proposed asset tools
+# Asset tooling: implementation status and design criteria
 
-These proposals are not implemented or advertised as available tools.
+Implemented capabilities are listed here as they are verified. The detailed
+criteria below also describe boundaries that tools must report rather than infer.
+
+| Area | Available tools | Verified scope |
+| --- | --- | --- |
+| Tileset analysis and transforms | `analyze_tileset_usage`, `compact_used_tileset`, `plan_tileset_merge`, `merge_tilesets` | Stored usage, pixel/property duplicates, reviewed compaction and conservative merge, map/event remapping, dependency guards and rollback; [details and limits](docs/TILESET-TRANSFORMS.md) |
+
+Import review, characters, movement audits and anchor plans are being implemented;
+their design criteria below are not yet a statement that those tools are available.
 
 - Read-only collection analysis: report unused image regions, exact duplicates,
   compatible tile-property groups, and possible packing improvements. Keep
@@ -189,7 +197,8 @@ and reject excess before writing, rather than infer compatibility from MCP budge
 Bounded tall input/output is now available through the explicit
 `RPGMAKER_ALLOW_TALL_XP_TILESETS=1` configuration; see
 [security limits](SECURITY.md#opt-in-tall-xp-tilesets). A semantic merge and a hard
-total-process-memory ceiling remain unimplemented. The constraints below describe
+total-process-memory ceiling are distinct: conservative semantic merging is now
+available, while a hard RSS ceiling remains unimplemented. The constraints below describe
 the broader merge design, not additional guarantees of the current pixel budget.
 
 The signed positive tile-ID model permits up to 4,048 regular rows: height
