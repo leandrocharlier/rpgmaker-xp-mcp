@@ -32,6 +32,11 @@ try {
   const preview=await client.callTool({name:'compact_used_tileset',arguments:args});
   assert.ok(!preview.isError,JSON.stringify(preview));const plan=JSON.parse(preview.content[0].text);
   const apply={...args,dryRun:false,reviewedPlanHash:plan.planHash,acknowledgeDynamicReferences:true};
+  const movement=await client.callTool({name:'audit_movement',arguments:{mapId:1,start:{x:1,y:1},runtimeProfile:'unknown',allowed:[{x:1,y:1,width:1,height:1}]}});
+  assert.ok(!movement.isError,JSON.stringify(movement));
+  const audit=JSON.parse(movement.content[0].text);assert.equal(audit.contained,false);assert.equal(audit.runtimeVerdict,'unknown');
+  const anchors=await client.callTool({name:'inspect_building_catalog',arguments:{objects:[{id:'house',width:5,height:5,anchors:[{name:'door',kind:'door',x:2,y:4},{name:'approach',kind:'approach',x:2,y:5,direction:8}]}]}});
+  assert.ok(!anchors.isError,JSON.stringify(anchors));
   assert.ok((await client.callTool({name:'compact_used_tileset',arguments:apply})).isError);
   await unlink(path('.mcp-write.lock'));
   const result=await client.callTool({name:'compact_used_tileset',arguments:apply});

@@ -6,8 +6,9 @@ criteria below also describe boundaries that tools must report rather than infer
 | Area | Available tools | Verified scope |
 | --- | --- | --- |
 | Tileset analysis and transforms | `analyze_tileset_usage`, `compact_used_tileset`, `plan_tileset_merge`, `merge_tilesets` | Stored usage, pixel/property duplicates, reviewed compaction and conservative merge, map/event remapping, dependency guards and rollback; [details and limits](docs/TILESET-TRANSFORMS.md) |
+| Movement and semantic placement | `audit_movement`, `inspect_building_catalog`, `plan_building_placement`, `plan_transfer_relocation` | Static XP containment and route geometry, explicit anchors, proposed tile collision and selective reverse-transfer plans; [runtime boundaries](docs/MOVEMENT-ANCHORS.md) |
 
-Import review, characters, movement audits and anchor plans are being implemented;
+Import review and character tools are being implemented;
 their design criteria below are not yet a statement that those tools are available.
 
 - Read-only collection analysis: report unused image regions, exact duplicates,

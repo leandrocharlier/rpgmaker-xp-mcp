@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,readFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {makeMap,makeTable,makeEventPage,makeEventCommand} from '../dist/utils/types.js';
+import {writeRxdataFile} from '../dist/utils/fileHandler.js';
+import {runProjectOperation} from '../dist/utils/security.js';
+import {planBuildingPlacement,planTransferRelocation,inspectBuildingCatalog} from '../dist/tools/buildingAnchorTools.js';
+const root=await mkdtemp(join(tmpdir(),'building-anchor-'));await mkdir(join(root,'Data'));
+const t={_class:'RPG::Tileset',id:1,passages:makeTable(392,1,1),priorities:makeTable(392,1,1),terrain_tags:makeTable(392,1,1)};t.priorities.data[0]=5;
+t.passages.data[385]=15;
+await writeRxdataFile(join(root,'Data','Tilesets.rxdata'),[null,t]);
+await writeRxdataFile(join(root,'Data','MapInfos.rxdata'),{});
+const map=makeMap(20,20,1),page=makeEventPage();page.list=[makeEventCommand(201,0,[0,2,2,2,2,0]),makeEventCommand()];map.events={'1':{_class:'RPG::Event',id:1,x:10,y:10,name:'Door',pages:[page]}};
+const file=join(root,'Data','Map001.rxdata');await writeRxdataFile(file,map);const before=await readFile(file);
+const object={id:'new7x7',width:7,height:7,anchors:[{name:'door',kind:'door',x:4,y:6},{name:'approach',kind:'approach',x:4,y:7,direction:8},{name:'shadow',kind:'shadow',x:7,y:6}]};
+const run=f=>runProjectOperation(root,undefined,false,f);
+const result=await run(()=>planBuildingPlacement(root,{mapId:1,eventId:1,object,doorAnchor:'door'}));assert.deepEqual(result.origin,{x:6,y:4});assert.deepEqual(result.preservedEvent,map.events['1']);assert.equal(result.anchors[1].facesDoor,true);assert.ok(result.anchors[0].currentTilePassage.every(p=>p.canExit));assert.equal(result.conflictCount,0);
+const tileIds=Array(49).fill(null);tileIds[6*7+4]=385;
+const blocked=await run(()=>planBuildingPlacement(root,{mapId:1,eventId:1,object,doorAnchor:'door',proposedTiles:{layer:0,tileIds}}));assert.equal(blocked.proposedAnchorCollision[1].stepIntoDoor,false);assert.deepEqual(blocked.preservedEvent,result.preservedEvent);
+tileIds[6*7+4]=384;const open=await run(()=>planBuildingPlacement(root,{mapId:1,eventId:1,object,doorAnchor:'door',proposedTiles:{layer:0,tileIds}}));assert.equal(open.proposedAnchorCollision[1].stepIntoDoor,true);
+for(let i=2;i<=4;i++){const m=makeMap(20,20,1),p=makeEventPage();p.list=[makeEventCommand(201,0,[0,1,10,10,2,0]),makeEventCommand(201,0,[0,1,10,10,4,1]),makeEventCommand(201,0,[1,1,2,3,0,0]),makeEventCommand(355,0,['# Synthetic unresolved script']),makeEventCommand()];m.events={'1':{_class:'RPG::Event',id:1,x:2,y:2,name:'Return',pages:[p]}};await writeRxdataFile(join(root,'Data',`Map00${i}.rxdata`),m);}
+const plan=await run(()=>planTransferRelocation(root,{oldDestination:{mapId:1,x:10,y:10},newDestination:{mapId:1,x:12,y:10},selected:[{mapId:2,eventId:1,pageIndex:0,commandIndex:0}]}));
+assert.equal(plan.references.length,6);assert.equal(plan.references.filter(r=>r.selected).length,1);assert.deepEqual(plan.references[0].proposedParameters,[0,1,12,10,2,0]);assert.deepEqual(plan.references[1].proposedParameters,plan.references[1].before);assert.equal(plan.unresolvedCount,6);assert.deepEqual(await readFile(file),before);
+assert.throws(()=>inspectBuildingCatalog([{...object,anchors:[{name:'door',kind:'door',x:99,y:0}]}]),/outside/);
+await writeRxdataFile(join(root,'Data','MapInfos.rxdata'),{'999':{}});await assert.rejects(run(()=>planTransferRelocation(root,{oldDestination:{mapId:1,x:10,y:10},newDestination:{mapId:1,x:12,y:10}})),/missing/);
+console.log('PASS semantic anchor alignment and unchanged door event; three interiors, ambiguous references, selective transfer plan, unresolved scripts/variables; no writes');

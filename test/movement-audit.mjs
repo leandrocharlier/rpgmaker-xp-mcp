@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,readFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {makeMap,makeTable,makeEventPage} from '../dist/utils/types.js';
+import {writeRxdataFile} from '../dist/utils/fileHandler.js';
+import {runProjectOperation} from '../dist/utils/security.js';
+import {auditMovement} from '../dist/tools/movementAuditTools.js';
+const root=await mkdtemp(join(tmpdir(),'movement-audit-'));await mkdir(join(root,'Data'));
+const t={_class:'RPG::Tileset',id:1,passages:makeTable(392,1,1),priorities:makeTable(392,1,1),terrain_tags:makeTable(392,1,1)};
+t.priorities.data[0]=5;t.passages.data[385]=15;
+await writeRxdataFile(join(root,'Data','Tilesets.rxdata'),[null,t]);
+const map=makeMap(7,7,1);map.data.data[3*7+3]=384;
+const file=join(root,'Data','Map001.rxdata');await writeRxdataFile(file,map);
+const options={mapId:1,start:{x:3,y:3},runtimeProfile:'xp-standard',allowed:[{x:2,y:2,width:3,height:3}],goals:[{x:4,y:3}]};
+const audit=o=>runProjectOperation(root,undefined,false,()=>auditMovement(root,o));
+let result=await audit(options);assert.equal(result.goals[0].reachable,true);assert.equal(result.contained,false);assert.ok(result.escape.witness.cells.length);
+// Wall ring blocks all four directional departures while the inner goal remains reachable.
+for(let y=1;y<=5;y++)for(let x=1;x<=5;x++)if(x===1||x===5||y===1||y===5)map.data.data[y*7+x]=385;
+const page=makeEventPage();page.trigger=1;map.events={'1':{_class:'RPG::Event',id:1,name:'Blocked stair',x:5,y:3,pages:[page]}};
+page.move_route.list=[{_class:'RPG::MoveCommand',code:3,parameters:[]},{_class:'RPG::MoveCommand',code:45,parameters:['# unresolved']},{_class:'RPG::MoveCommand',code:3,parameters:[]}];
+await writeRxdataFile(file,map);const before=await readFile(file);
+result=await audit({...options,approaches:[{eventId:1,cell:{x:4,y:3},direction:6,footprint:{x:5,y:2,width:1,height:3}}]});
+assert.equal(result.contained,true);assert.equal(result.approaches[0].approachReachable,true);assert.equal(result.approaches[0].facesEvent,true);assert.equal(result.approaches[0].stepIntoEvent,false);assert.match(result.approaches[0].activation,/unknown/);assert.equal(result.runtimeVerdict,'unknown');assert.deepEqual(await readFile(file),before);
+await assert.rejects(audit({...options,start:{x:7,y:0}}),/outside/);
+const route=result.approaches[0].pages[0].routeGeometry;assert.equal(route.steps.length,1);assert.equal(route.steps[0].insideFootprint,false);assert.equal(route.steps[0].tileModelCanStep,false);assert.equal(route.unknown,true);
+console.log('PASS tile-0 escape despite positive goal; containment; blocked stair approach separate from runtime activation; no writes');
