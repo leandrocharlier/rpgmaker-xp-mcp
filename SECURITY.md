@@ -93,6 +93,8 @@ node test/tileset-transform.mjs
 node test/extensions-mcp.mjs
 node test/movement-audit.mjs
 node test/building-anchors.mjs
+node test/reviewed-import.mjs
+node test/character-sheets.mjs
 node test/essentials-strings.mjs
 node test/tools.mjs
 node test/essentials-mcp.mjs <essentials-project>

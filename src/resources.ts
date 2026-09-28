@@ -25,11 +25,16 @@ AUTHORING MAPS — FIRST call get_map_design_guide (or read the "map-design" res
 - NEVER overlap two multi-tile objects (trees, houses) on the same layer — set_map_tiles overwrites and they clip; space landmark objects.
 - Use the tileset catalog for creator-facing meaning, render_tileset_atlas for quick numeric lookup, and render_map to verify composition (it is a FLAT composite — open the editor to confirm overhead occlusion).
 
-Full guidance is available as resources: map-design (level design), tileset-catalog (tile identification), authoring (XP particularities + anti-drift governance), wisdom (engine internals).`;
+REVIEWED WORKFLOWS — read the asset-review, tileset-transforms and movement-anchors resources for explicit manifest schemas and examples. Review bindings detect stale inputs; they do not approve visual semantics. Static XP reachability never certifies event activation or Essentials runtime behavior. Compact/merge tools require reviewed plans and report unresolved script references.
+
+Full guidance is available as resources: map-design (level design), tileset-catalog (tile identification), authoring (XP particularities + anti-drift governance), wisdom (engine internals), asset-review, tileset-transforms and movement-anchors.`;
 
 interface DocResource { uri: string; name: string; description: string; mimeType: string; file: string; }
 
 export const RESOURCES: DocResource[] = [
+  { uri: 'rpgmaker-xp://docs/asset-review', name: 'Reviewed imports and character sheets', description: 'Explicit JSON specifications, review bindings, coverage, masks, frame layouts and conversion examples.', mimeType: 'text/markdown', file: 'docs/ASSET-REVIEW.md' },
+  { uri: 'rpgmaker-xp://docs/tileset-transforms', name: 'Reviewed tileset transforms', description: 'Usage analysis, compact/merge plans, property conflicts, remapping, budgets and rollback.', mimeType: 'text/markdown', file: 'docs/TILESET-TRANSFORMS.md' },
+  { uri: 'rpgmaker-xp://docs/movement-anchors', name: 'Movement and semantic anchors', description: 'Static XP containment, event approach boundaries, building placement and reverse-transfer planning.', mimeType: 'text/markdown', file: 'docs/MOVEMENT-ANCHORS.md' },
   { uri: 'rpgmaker-xp://docs/map-design', name: 'Map design guide', description: 'Level/map design: the three-layer model (terrain/clutter/overhead), tile priority & passability, multi-tile no-overlap rule, composition, authoring workflow.', mimeType: 'text/markdown', file: 'MAP-DESIGN.md' },
   { uri: 'rpgmaker-xp://docs/tileset-catalog', name: 'Tileset identification harness', description: 'Evidence-first workflow for identifying tile semantics, grouping multi-tile objects, assigning confidence, and validating catalogs before map authoring.', mimeType: 'text/markdown', file: 'TILESET-CATALOG.md' },
   { uri: 'rpgmaker-xp://docs/authoring', name: 'Authoring & governance', description: 'Particularities of writing for RPG Maker XP and how this MCP acts as a governance layer to prevent drift.', mimeType: 'text/markdown', file: 'AUTHORING-XP.md' },

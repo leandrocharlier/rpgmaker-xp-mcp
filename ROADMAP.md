@@ -7,9 +7,30 @@ criteria below also describe boundaries that tools must report rather than infer
 | --- | --- | --- |
 | Tileset analysis and transforms | `analyze_tileset_usage`, `compact_used_tileset`, `plan_tileset_merge`, `merge_tilesets` | Stored usage, pixel/property duplicates, reviewed compaction and conservative merge, map/event remapping, dependency guards and rollback; [details and limits](docs/TILESET-TRANSFORMS.md) |
 | Movement and semantic placement | `audit_movement`, `inspect_building_catalog`, `plan_building_placement`, `plan_transfer_relocation` | Static XP containment and route geometry, explicit anchors, proposed tile collision and selective reverse-transfer plans; [runtime boundaries](docs/MOVEMENT-ANCHORS.md) |
+| Reviewed imports | `review_tileset_import` | Explicit evidence, source inventory/coverage, masks and bands, duplicate checks, escaped index, contact sheets and reconstruction; [manifest and limits](docs/ASSET-REVIEW.md) |
+| Character sheets | `inspect_character_sheet`, `validate_character_set` | Explicit layouts, frame alpha/bounds/anchors, reviewed conversion/extraction and role-set comparison; [specification](docs/ASSET-REVIEW.md#character-inspection-and-conversion) |
 
-Import review and character tools are being implemented;
-their design criteria below are not yet a statement that those tools are available.
+### Boundaries and remaining work
+
+- Source identity, grid scale and region semantics require caller review. Hashes
+  detect stale evidence; they do not certify human judgment. Coverage is scoped
+  to an explicit directory or declared inventory, never an unspecified collection.
+- Import and character tools export review artifacts under `Data/.mcp-preview`;
+  they do not automatically install graphics, assign flags or edit Essentials metadata.
+- Compact packing preserves pixels/properties and stored references, not convenient
+  multi-tile object grouping or references in external catalogs/scripts.
+- Merge rejects differing autotile slots/reserved properties and other tileset
+  settings. Automatic reconciliation of incompatible settings is not implemented.
+- Movement models stock XP tile stacks and deterministic cardinal route geometry.
+  Event page selection/collision, script rules and Essentials behavior remain
+  unknown. Lateral activation needs a real initialized/updated runtime scene test.
+- Building placement and reverse-transfer relocation remain non-mutating plans.
+  Apply reviewed page edits with existing tools; ambiguous links are never moved
+  automatically. Proposed collisions require an explicit replacement tile grid.
+- Memory controls bound workloads and estimate working buffers; they are not an
+  OS-enforced process RSS ceiling. Larger collections require bounded batches.
+
+The sections below retain the acceptance criteria that motivated these tools.
 
 - Read-only collection analysis: report unused image regions, exact duplicates,
   compatible tile-property groups, and possible packing improvements. Keep
@@ -43,8 +64,9 @@ provenance. Changes to crop or scale should invalidate the affected review.
 Synthetic acceptance fixtures should include a miniature complete room that must
 remain unreviewed or be marked as an example scene, a confirmed 16-pixel modular
 source enlarged 2x with nearest-neighbor, native 32-pixel art kept at 1x, and a
-credit panel excluded from playable tile candidates. These are proposed curation
-checks, not a reported defect in `compose_tileset_atlas` or an implemented gate.
+credit panel excluded from playable tile candidates. These checks are implemented
+for explicit review manifests; they are not automatic semantic classification or
+a reported defect in `compose_tileset_atlas`.
 
 Extend this review with coverage accounting for every source and identified
 region: included, duplicate-of (with a resolvable target), excluded demo/credits
@@ -59,8 +81,8 @@ and other objects in long palettes. Preserve duplicate links and exclusion reaso
 in the index. Add a mixed synthetic sheet containing valid objects, an example
 scene, credits, and duplicates; verify every region has an accounted-for status,
 links resolve to the correct output rows, and partial review is never reported
-as complete coverage. These extend the proposed provenance review; they do not
-describe a defect in the current composition tool or an implemented audit.
+as complete coverage. These extend the provenance review tool; they do not
+describe a defect in the current composition tool.
 
 Review proposed strip boundaries for cuts through objects before packing. A source
 group or sheet region is not necessarily one object. Warn about suspected cuts
@@ -108,9 +130,10 @@ assign character graphics; `validate_assets` checks referenced filenames;
 `render_map` with `drawEvents:true` previews the first event page's selected
 frame using a 4-by-4 layout and bottom-center anchor. It does not validate
 animation sequences or choose active pages at runtime. `classify_asset` offers
-asset heuristics, not a character-sheet compatibility certificate. No dedicated
-frame extraction, animation validation, or character-sheet conversion tool is
-implemented yet.
+asset heuristics, not a character-sheet compatibility certificate. Dedicated
+inspection, conversion and extraction now use explicit specifications through
+`inspect_character_sheet`; `validate_character_set` compares labeled sheets.
+Animation timing and runtime behavior still require an actual game test.
 
 ## Movement boundaries and transfers
 
@@ -190,8 +213,8 @@ validation limits, not guarantees about editor, runtime, GPU, or preview capacit
 The [XP material specification](https://www.rpg-maker.fr/dl/monos/aide/xp/source/rpgxp/material.html)
 (a mirror of the XP help) describes eight 32-pixel columns and no fixed tileset
 file-size limit; it does not establish a universal practical rendering limit.
-A future merge plan must accept an explicit tested target-runtime height limit
-and reject excess before writing, rather than infer compatibility from MCP budgets.
+Merge plans accept an explicit tested target-runtime height limit and reject
+excess before writing, rather than infer compatibility from MCP budgets.
 
 ### Tall XP atlas support and remaining merge work
 
@@ -227,4 +250,5 @@ For concatenation, preserve the chosen base prefix and map each appended bank's
 regular IDs by its row offset. Only skip a repeated prefix after proving pixels,
 properties, and autotile metadata compatible. Reconcile or reject differing
 panorama/fog/battleback settings too: these affect maps sharing the merged record.
-The opt-in profile does not add a merge tool or remove the default image limits.
+The opt-in profile changes image handling; transformations still require reviewed
+plans and do not remove the default general-image limits.

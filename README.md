@@ -16,9 +16,18 @@ project's `.rxdata` files directly — actors, skills, items, maps, events,
 scripts and system data — and renders map previews to PNG so you can see what
 was built without opening the editor.
 
-It talks to XP's native Ruby 1.8 Marshal format. Nothing is exported,
-converted, or kept in a side file: it edits your real project, and the editor
-opens the result normally.
+This fork focuses on Pokémon Essentials workflows while keeping game-specific
+PBS and player metadata separate from standard RPG Maker XP data. Its reviewed
+asset tools provide explicit scale/coverage evidence and character-frame conversion;
+tileset transforms preserve stored map/event references; movement tools provide
+static diagnostics and semantic placement plans. Read the MCP resources or guides:
+[asset review](docs/ASSET-REVIEW.md), [tileset transforms](docs/TILESET-TRANSFORMS.md),
+and [movement and anchors](docs/MOVEMENT-ANCHORS.md). Dry-run results are not a
+substitute for visual review or tests in the intended game runtime.
+
+It talks to XP's native Ruby 1.8 Marshal format. Database editing tools update
+project files directly; asset review tools export previews and manifests before
+you choose to incorporate them into a project.
 
 ---
 
