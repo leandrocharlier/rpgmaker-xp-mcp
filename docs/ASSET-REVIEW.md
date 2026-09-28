@@ -71,6 +71,16 @@ rows for each region, so related pieces remain together and no other region
 interleaves their destination selection. This favors clear selection over density.
 Opaque crop edges produce a suspected-cut warning, never an automatic judgment.
 
+The report's `appearancePolicy` is `preserve-source-rgba`: selected pixels retain
+their source color and alpha. A painted gray shadow at alpha 255 remains opaque;
+it is not automatically treated as background. Painted checker patterns are not
+proof of transparency either. Component masks select pixels, not alpha values.
+For an intentional shadow adaptation, keep the original and create a separately
+reviewed source. Record the original/adapted hashes, exact affected mask, old/new
+RGBA and rationale in review evidence, then review the resulting composition.
+The importer does not perform that recoloring or verify a free-text transformation
+history. Successful pixel-identity checks alone do not prove visual integration.
+
 After review, call:
 
 ```json

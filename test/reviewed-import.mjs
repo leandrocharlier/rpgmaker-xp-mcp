@@ -71,3 +71,22 @@ spec.sources=[{id:'sheet',path:'sparse.png'}];delete spec.inventoryDirectory;
 spec.regions=Array.from({length:17},(_,i)=>region(`sparse-${i}`,{x:0,y:0,width:1024,height:1024},{kind:'unreviewed',status:'pending',sourceGrid:null,mask:[{x:i,y:0,width:1,height:1}]}));
 await save();await assert.rejects(call(),/crop-mask allocation/);
 console.log('PASS adversarial sparse component masks cannot multiply retained crop allocations beyond budget');
+
+// Artwork, opaque gray shadow, translucent shadow and painted checker pixels are
+// distinct evidence; none may be silently keyed out or have alpha inferred.
+const shadows=makeCanvas(32,32);
+shadows.data.set([79,79,79,255],0);
+shadows.data.set([0,0,0,64],4);
+shadows.data.set([255,255,255,255],8);
+shadows.data.set([180,180,180,255],12);
+shadows.data.set([22,33,44,0],16);
+await writeFile(join(root,'shadows.png'),encodePng(shadows));
+spec.sources=[{id:'sheet',path:'shadows.png'}];spec.regions=[region('building',{x:0,y:0,width:32,height:32})];
+await approve();const shadowReport=await call({dryRun:false,outputName:'shadows'});
+assert.equal(shadowReport.appearancePolicy.mode,'preserve-source-rgba');
+assert.equal(shadowReport.appearancePolicy.shadowAlphaAdaptation,false);
+const shadowAtlas=await decodePng(shadowReport.files['atlas.png']);
+assert.deepEqual([...shadowAtlas.data.slice(0,20)],[...shadows.data.slice(0,20)]);
+shadows.data.set([0,0,0,64],0);await writeFile(join(root,'shadows.png'),encodePng(shadows));
+assert.equal((await call()).canApply,false);
+console.log('PASS opaque shadow, translucent shadow, checker and transparent RGB preserved; explicit alpha adaptation invalidates prior evidence');
