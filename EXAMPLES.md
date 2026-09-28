@@ -539,6 +539,28 @@ another engine.
 
 ---
 
+## Removing unused trailing tilesets
+
+`truncate_unused_tilesets` removes a contiguous suffix of the tileset database.
+For example, preview removing ID 3 and every later slot:
+
+```json
+{"fromId":3,"dryRun":true}
+```
+
+The default is a read-only preview. Inspect `canTruncate`, `references`,
+`mapsScanned`, and `removed`, then repeat with `dryRun:false` to apply it.
+Every on-disk `Map*.rxdata` is scanned, including maps absent from MapInfos.
+Missing indexed maps, unreadable maps, or invalid references block the operation.
+Map inventory and content are rechecked before each replacement attempt.
+Scans are limited to 10,000 maps and 128 MiB of reference data.
+
+Earlier IDs and settings are preserved; maps and graphic files are not changed.
+Backups and rollback protect the database write. A `fromId` equal to the current
+array length is a validated no-op. Script-generated or dynamic tileset references
+are not analyzed: review those before applying. Save editor changes and use
+File > Close Project before writing, then reopen `Game.rxproj` afterward.
+
 ## Troubleshooting
 
 **"Invalid project path" / no tools appear**
@@ -547,12 +569,13 @@ another engine.
 after changing it.
 
 **File permission errors on write**
-The RPG Maker XP editor is open. Close it.
+Save editor changes and use File > Close Project before retrying. Persistent
+file locks may also come from another process; a running editor alone does not
+establish whether the project is loaded.
 
 **Changes vanished**
 The editor was open and re-saved over them. Recover from
-`Data/.mcp-backup/` — remembering that it holds only the state before the
-current session's first write.
+`Data/.mcp-backup/` — each write to an existing file creates a unique backup.
 
 **Map renders but tiles are missing or wrong**
 The tileset graphic was not found. Check the result's `notes`, and set

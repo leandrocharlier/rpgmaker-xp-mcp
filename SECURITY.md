@@ -81,12 +81,21 @@ node test/atlas-compose-mcp.mjs
 node test/table-budgets-mcp.mjs
 node test/import-plan-mcp.mjs
 node test/rename-retry.mjs
+node test/tileset-truncate-mcp.mjs
 node test/essentials-strings.mjs
 node test/tools.mjs
 node test/essentials-mcp.mjs <essentials-project>
 ```
 
 The last command only reads the Essentials project and round-trips maps in memory.
+
+Tileset tail truncation defaults to a read-only preview. Applying it requires
+an unreferenced suffix after scanning all on-disk maps and checking MapInfos
+completeness. Transaction guards recheck the inventory and reference-file hashes
+before each forward rename attempt, including retries. Unreadable or changed
+dependencies abort the write. These checks cover stored map tileset IDs, not
+references computed by game scripts, and cannot eliminate external filesystem
+races after the final check. Graphics and maps are never deleted by this tool.
 
 ## Compact numeric tables
 

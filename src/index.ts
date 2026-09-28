@@ -30,6 +30,7 @@ import * as guideTools from './tools/guideTools.js';
 import * as tilesetTools from './tools/tilesetTools.js';
 import { composeTilesetAtlas } from './tools/atlasComposeTools.js';
 import { planTilesetImport } from './tools/importPlanTools.js';
+import { truncateUnusedTilesets } from './tools/tilesetPruneTools.js';
 
 /**
  * RPG Maker XP MCP Server
@@ -129,7 +130,8 @@ class RPGMakerXPServer {
         if (!validate) throw new Error('Unknown tool');
         const checked = validate(args);
         if (!checked.valid) throw new Error(`Invalid arguments: ${checked.errorMessage}`);
-        const mutates = !/^(get_|search_|validate_|classify_|plan_)/.test(request.params.name);
+        const mutates = request.params.name === 'truncate_unused_tilesets'
+          ? args.dryRun === false : !/^(get_|search_|validate_|classify_|plan_)/.test(request.params.name);
         return await runProjectOperation(this.projectPath, process.env.RPGMAKER_RTP_PATH || 'C:/Program Files (x86)/Steam/steamapps/common/RPGXP/rtp', mutates,
           () => this.handleToolCall(request.params.name, args));
       } catch (error) {
@@ -768,6 +770,11 @@ class RPGMakerXPServer {
 
       // Database Tools (Classes, States, Enemies, Troops, CommonEvents, Tilesets, ...)
       {
+        name:'truncate_unused_tilesets',
+        description:'Remove only a contiguous unused suffix of Tilesets.rxdata starting at fromId; dryRun defaults true. Scans ALL on-disk Map*.rxdata, not only MapInfos, and refuses referenced, missing-indexed or unreadable maps. Preserves preceding IDs, maps and graphics. Actual writes recheck map inventory/content and use backups/rollback. Stored references only; scripts and dynamic references require separate review.',
+        inputSchema:{type:'object',properties:{fromId:{type:'integer'},dryRun:{type:'boolean',description:'Default true (no lock or writes). Set false only after reviewing the simulation.'}},required:['fromId']},
+      },
+      {
         name: 'plan_tileset_import',
         annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
         description: 'Read-only deterministic bank planning for explicit PNG rectangles with the same shelf packing as compose_tileset_atlas. Repeats a base prefix in every bank. Optional contiguous objectId groups never split across banks; rejects indivisible objects that cannot fit. Estimates rows, tile IDs and RGBA memory from PNG headers; does not classify assets or fully validate/decode PNG contents. No locks or files are written.',
@@ -1294,6 +1301,8 @@ class RPGMakerXPServer {
         return await mapTools.scatterTiles(this.projectPath, args.mapId, args.layer, args.tileIds, args.region, { density: args.density, seed: args.seed, avoidOccupied: args.avoidOccupied, focal: args.focal });
 
       // Database Tools
+      case 'truncate_unused_tilesets':
+        return await truncateUnusedTilesets(this.projectPath,args.fromId,args.dryRun ?? true);
       case 'plan_tileset_import':
         return await planTilesetImport(this.projectPath,args);
       case 'compose_tileset_atlas':

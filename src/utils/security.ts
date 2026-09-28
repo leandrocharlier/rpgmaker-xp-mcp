@@ -9,7 +9,7 @@ import { chargeTable, validatePlainTable } from './tableValidation.js';
 
 export const MAX_FILE = 64 * 1024 * 1024;
 const MAX_TRANSACTION = 128 * 1024 * 1024;
-type State = { project: string; rtp?: string; observed: Map<string, string>; writes: Map<string, Buffer> };
+type State = { project: string; rtp?: string; observed: Map<string, string>; writes: Map<string, Buffer>; guards: Array<() => Promise<void>> };
 const scope = new AsyncLocalStorage<State>();
 let queue: Promise<unknown> = Promise.resolve();
 const digest = (b: Buffer) => createHash('sha256').update(b).digest('hex');
@@ -109,7 +109,7 @@ async function assertUnchanged(path: string, expected: string | null): Promise<v
   if (await currentDigest(path) !== expected) throw new Error(`File changed outside this operation; refusing replacement or rollback: ${path}`);
 }
 
-async function replace(path: string, bytes: Buffer, expected: string | null): Promise<void> {
+async function replace(path: string, bytes: Buffer, expected: string | null, beforeRename?: () => Promise<void>): Promise<void> {
   allowed(path, true);
   const temp = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
   const handle = await open(temp, 'wx');
@@ -118,6 +118,7 @@ async function replace(path: string, bytes: Buffer, expected: string | null): Pr
     // Retry the same synced temporary file, never the tool or whole transaction.
     // Four waits (50/100/200/400 ms), only for transient Windows-style busy errors.
     for (let attempt = 0; ; attempt++) {
+      if (beforeRename) await beforeRename();
       await assertUnchanged(path, expected);
       try { await rename(temp, path); break; }
       catch (e) {
@@ -179,7 +180,7 @@ async function commit(state: State): Promise<void> {
   try {
     for (const [path, bytes] of state.writes) {
       const old = originals.get(path)!;
-      await replace(path, bytes, old === null ? null : digest(old)); written.push(path);
+      await replace(path, bytes, old === null ? null : digest(old), async () => { for (const guard of state.guards) await guard(); }); written.push(path);
     }
   } catch (error) {
     const rollbackErrors: string[] = [];
@@ -198,7 +199,7 @@ async function commit(state: State): Promise<void> {
 }
 
 export function runProjectOperation<T>(project: string, rtp: string | undefined, mutates: boolean, fn: () => Promise<T>): Promise<T> {
-  const task = queue.then(() => scope.run({ project: resolve(project), rtp, observed: new Map(), writes: new Map() }, async () => {
+  const task = queue.then(() => scope.run({ project: resolve(project), rtp, observed: new Map(), writes: new Map(), guards: [] }, async () => {
     const lock = contained(project, join(project, 'Data', '.mcp-write.lock'));
     let handle;
     try {
@@ -214,6 +215,13 @@ export function runProjectOperation<T>(project: string, rtp: string | undefined,
   }));
   queue = task.catch(() => {});
   return task;
+}
+
+/** Recheck read-only dependencies before each forward rename attempt. */
+export function beforeProjectCommit(check: () => Promise<void>): void {
+  const state = scope.getStore();
+  if (!state) throw new Error('A project transaction is required for this operation');
+  state.guards.push(check);
 }
 
 export function checkValue(value: unknown, depth = 0, budget = { nodes: 0, text: 0, tableBytes: 0 }): void {
