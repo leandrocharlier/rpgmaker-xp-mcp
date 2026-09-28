@@ -31,6 +31,7 @@ import * as tilesetTools from './tools/tilesetTools.js';
 import { composeTilesetAtlas } from './tools/atlasComposeTools.js';
 import { planTilesetImport } from './tools/importPlanTools.js';
 import { truncateUnusedTilesets } from './tools/tilesetPruneTools.js';
+import { extensions, extensionByName } from './tools/extensions.js';
 
 /**
  * RPG Maker XP MCP Server
@@ -73,7 +74,10 @@ class RPGMakerXPServer {
     for (const tool of this.getToolDefinitions()) {
       const schema: any = structuredClone(tool.inputSchema);
       schema.additionalProperties = false;
-      hardenSchema(schema);
+      // Extensions provide explicit bounds; map-field heuristics would corrupt
+      // pixel coordinates, signed offsets, and semantic string identifiers.
+      if (!extensionByName.has(tool.name)) hardenSchema(schema);
+      if (this.validators.has(tool.name)) throw new Error(`Duplicate tool name: ${tool.name}`);
       this.validators.set(tool.name, provider.getValidator(schema));
       this.definitions.push({ ...tool, inputSchema: schema });
     }
@@ -130,8 +134,9 @@ class RPGMakerXPServer {
         if (!validate) throw new Error('Unknown tool');
         const checked = validate(args);
         if (!checked.valid) throw new Error(`Invalid arguments: ${checked.errorMessage}`);
-        const mutates = request.params.name === 'truncate_unused_tilesets'
-          ? args.dryRun === false : !/^(get_|search_|validate_|classify_|plan_)/.test(request.params.name);
+        const mutates = extensionByName.get(request.params.name)?.mutates(args) ??
+          (request.params.name === 'truncate_unused_tilesets'
+            ? args.dryRun === false : !/^(get_|search_|validate_|classify_|plan_)/.test(request.params.name));
         return await runProjectOperation(this.projectPath, process.env.RPGMAKER_RTP_PATH || 'C:/Program Files (x86)/Steam/steamapps/common/RPGXP/rtp', mutates,
           () => this.handleToolCall(request.params.name, args));
       } catch (error) {
@@ -151,6 +156,7 @@ class RPGMakerXPServer {
 
   private getToolDefinitions(): Tool[] {
     return [
+      ...extensions.map(tool => tool.definition),
       // Actor Tools
       {
         name: 'get_actors',
@@ -1164,6 +1170,8 @@ class RPGMakerXPServer {
   }
 
   private async executeToolFunction(name: string, args: any): Promise<any> {
+    const extension = extensionByName.get(name);
+    if (extension) return extension.run(this.projectPath, args);
     switch (name) {
       // Actor Tools
       case 'get_actors':

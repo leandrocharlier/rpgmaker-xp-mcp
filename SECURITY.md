@@ -14,6 +14,11 @@ not establish a project security context: use `runProjectOperation` when using
 them outside the MCP dispatcher.
 
 Writes are staged until the tool succeeds, with a 128 MiB transaction budget.
+Read-only project operations reject file staging and directory creation. New
+tools declare their mutation policy explicitly so dry-runs do not acquire a write
+lock or silently export files. Input dependency guards recheck consumed source
+hashes before forward renames; staged destinations use the existing destination
+conflict checks instead of comparing staged data with its original hash.
 Existing files receive unique backups in the adjacent `.mcp-backup` directory.
 A backup failure stops the operation, including subsequent retries. Individual
 files are replaced by a synced temporary file and rename. Rename retries only
@@ -83,6 +88,7 @@ node test/import-plan-mcp.mjs
 node test/rename-retry.mjs
 node test/tileset-truncate-mcp.mjs
 node test/tall-tilesets.mjs
+node test/dependency-guards.mjs
 node test/essentials-strings.mjs
 node test/tools.mjs
 node test/essentials-mcp.mjs <essentials-project>

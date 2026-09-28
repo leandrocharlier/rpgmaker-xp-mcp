@@ -9,7 +9,7 @@ import { chargeTable, validatePlainTable } from './tableValidation.js';
 
 export const MAX_FILE = 64 * 1024 * 1024;
 const MAX_TRANSACTION = 128 * 1024 * 1024;
-type State = { project: string; rtp?: string; observed: Map<string, string>; writes: Map<string, Buffer>; guards: Array<() => Promise<void>>; decodedPixels: number };
+type State = { project: string; rtp?: string; observed: Map<string, string>; writes: Map<string, Buffer>; guards: Array<() => Promise<void>>; decodedPixels: number; canWrite: boolean };
 const scope = new AsyncLocalStorage<State>();
 let queue: Promise<unknown> = Promise.resolve();
 const digest = (b: Buffer) => createHash('sha256').update(b).digest('hex');
@@ -94,6 +94,7 @@ async function readDiskLimited(path: string): Promise<Buffer> {
 }
 
 export async function safeMkdir(path: string, _opts?: unknown): Promise<void> {
+  if (scope.getStore()?.canWrite === false) throw new Error('Read-only operation cannot create directories');
   allowed(path, true);
   await mkdir(path, { recursive: true });
   allowed(path, true);
@@ -142,6 +143,7 @@ export async function versionedBackup(path: string): Promise<void> {
 }
 
 export async function atomicWriteFile(path: string, data: string | Uint8Array, encoding: BufferEncoding = 'utf8'): Promise<void> {
+  if (scope.getStore()?.canWrite === false) throw new Error('Read-only operation cannot write files');
   path = allowed(path, true);
   const bytes = typeof data === 'string' ? Buffer.from(data, encoding) : Buffer.from(data);
   if (bytes.length > MAX_FILE) throw new Error('Output exceeds the 64 MiB limit');
@@ -199,7 +201,7 @@ async function commit(state: State): Promise<void> {
 }
 
 export function runProjectOperation<T>(project: string, rtp: string | undefined, mutates: boolean, fn: () => Promise<T>): Promise<T> {
-  const task = queue.then(() => scope.run({ project: resolve(project), rtp, observed: new Map(), writes: new Map(), guards: [], decodedPixels: 0 }, async () => {
+  const task = queue.then(() => scope.run({ project: resolve(project), rtp, observed: new Map(), writes: new Map(), guards: [], decodedPixels: 0, canWrite: mutates }, async () => {
     const lock = contained(project, join(project, 'Data', '.mcp-write.lock'));
     let handle;
     try {
@@ -222,6 +224,26 @@ export function beforeProjectCommit(check: () => Promise<void>): void {
   const state = scope.getStore();
   if (!state) throw new Error('A project transaction is required for this operation');
   state.guards.push(check);
+}
+
+/** Guard consumed input files without confusing staged output with original data.
+ * Written destinations are separately hash-checked before commit and each rename.
+ * Call after reading dependencies, before returning from a mutating operation.
+ */
+export function guardProjectReads(paths: string[]): void {
+  const state = scope.getStore();
+  if (!state) throw new Error('A project transaction is required for dependency guards');
+  const expected = paths.map(path => {
+    path = allowed(path);
+    const hash = state.observed.get(path);
+    if (!hash) throw new Error('Dependency must be read before registering its guard');
+    return {path,hash};
+  });
+  beforeProjectCommit(async () => {
+    for (const {path,hash} of expected) {
+      if (!state.writes.has(path)) await assertUnchanged(path,hash);
+    }
+  });
 }
 
 export function checkValue(value: unknown, depth = 0, budget = { nodes: 0, text: 0, tableBytes: 0 }): void {
