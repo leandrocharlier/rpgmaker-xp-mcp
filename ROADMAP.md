@@ -140,6 +140,20 @@ placement, door collision, arrival/exit reachability, and actual activation
 separately, including unchanged event coordinates and commands. Default-blocked
 imported graphics are input data requiring review, not an MCP serialization bug.
 
+Extend relocation dry-runs with a reverse index of incoming Transfer Player (201)
+commands. List the source map, event, page, and command index for each reference
+to the old destination, distinguishing the doorway coordinate from its approach
+cell. Require explicit selection of links to update rather than replacing every
+matching coordinate: identical destinations can have different intended uses.
+Report variable-based transfers and script-computed destinations as unresolved.
+Preserve unselected links and unrelated commands and page properties.
+
+Add a synthetic relocation fixture with three interiors and their return links,
+plus two ambiguous references to the same destination. Preview all references,
+update only the selected ones, verify travel in both directions, and compare
+unrelated commands unchanged. This extends the anchor placement proposal; manual
+updates through `update_map_event` are existing functionality, not a reported bug.
+
 `validate_connectivity` currently checks the inter-map transfer graph and bounds,
 not walkable cell containment or stair geometry. The `render_map` passability
 overlay is approximate and is not a movement validator.
