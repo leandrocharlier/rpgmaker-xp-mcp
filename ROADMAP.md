@@ -70,6 +70,14 @@ implemented yet.
   explicitly supplied stair footprints and permitted entry/exit directions.
   Report runtime-dependent event pages, scripts, and movement rules as unknown;
   keep engine-specific passability adapters separate from standard XP semantics.
+  Distinguish standing on an event cell from reaching a valid approach that
+  activates it. A player-touch event may activate after an attempted lateral move
+  into a blocked cell; ordinary walkability BFS alone cannot reject that transfer.
+  Keep collision/approach checks separate from actual event activation tests.
+  Add a synthetic side-entry staircase fixture with an impassable trigger cell:
+  verify both travel directions in the target runtime, transfer completion,
+  restored player visibility, and released movement/direction locks. Preserve
+  the intended side-entry artwork and route instead of assuming frontal access.
 
 `validate_connectivity` currently checks the inter-map transfer graph and bounds,
 not walkable cell containment or stair geometry. The `render_map` passability
