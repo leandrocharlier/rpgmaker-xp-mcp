@@ -37,6 +37,22 @@ source enlarged 2x with nearest-neighbor, native 32-pixel art kept at 1x, and a
 credit panel excluded from playable tile candidates. These are proposed curation
 checks, not a reported defect in `compose_tileset_atlas` or an implemented gate.
 
+Extend this review with coverage accounting for every source and identified
+region: included, duplicate-of (with a resolvable target), excluded demo/credits
+(with a reason), or pending. Report the full source inventory and region counts
+by status; distinguish a curated selection from complete collection coverage.
+Unreviewed sources and unclassified regions must remain visible as pending,
+and style preferences must not silently drop otherwise valid material.
+
+Provide a navigable source-to-tileset index linking each included region to its
+destination rows and tile IDs, with reviewed labels for finding stairs, furniture,
+and other objects in long palettes. Preserve duplicate links and exclusion reasons
+in the index. Add a mixed synthetic sheet containing valid objects, an example
+scene, credits, and duplicates; verify every region has an accounted-for status,
+links resolve to the correct output rows, and partial review is never reported
+as complete coverage. These extend the proposed provenance review; they do not
+describe a defect in the current composition tool or an implemented audit.
+
 ## Character sheets
 
 - Read-only inspection of explicit XP 4-by-4 character sheets: per-frame and
