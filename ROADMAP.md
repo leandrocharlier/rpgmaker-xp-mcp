@@ -68,6 +68,19 @@ modular wall that may be split at reviewed boundaries with source-to-output link
 and a reconstruction preview. This extends import curation checks, not the
 current composer's contract for explicitly supplied rectangles.
 
+Allow reviewed rectangular bands with different split positions at different
+heights, rather than only full-height vertical strips. Keep related parts
+adjacent and selectable as a complete group. Record source rectangles, component
+masks, and destination padding separately: a bounding box alone cannot faithfully
+isolate objects with holes or nearby unrelated objects. Require explicit mask and
+placement data sufficient to reconstruct the selected pixels without ambiguity.
+
+Extend the synthetic boundary fixture with a TV above an L-shaped sofa whose
+appropriate boundaries differ by band. Verify non-overlapping source ownership
+and destination placement, complete coverage of selected components, exclusion of
+nearby objects, and complete selection/reconstruction of both objects. These are
+importer requirements, not reported MCP serialization failures.
+
 ## Character sheets
 
 - Read-only inspection of explicit XP 4-by-4 character sheets: per-frame and
