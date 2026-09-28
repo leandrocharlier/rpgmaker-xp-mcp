@@ -1037,11 +1037,13 @@ class RPGMakerXPServer {
       },
       {
         name: 'create_tileset_identification_harness',
-        description: 'Create a review bundle for one tileset that separates engine facts from semantic claims. Produces the exact source sheet, isolated transparent tile images, source-row strips, manifest.json (priority, passage flags, alpha bounds), catalog templates, and an interactive index.html for identifying single tiles and rectangular multi-tile objects. Use this before assigning map-design roles to an uncataloged tileset.',
+        description: 'Create a bounded review section for one tileset. Produces an exact source crop, isolated tiles, row strips, manifest, catalog template and interactive HTML. Use rowStart/rowCount or automatic sizing; follow page.next_row_start. Global tile IDs are preserved. Use this before assigning semantic map-design roles.',
         inputSchema: {
           type: 'object',
           properties: {
             tilesetId: { type: 'number', description: 'Tileset id to inspect' },
+            rowStart: { type: 'integer', minimum: 0, maximum: 2047, description: 'First source row, zero-based. Tile IDs stay global.' },
+            rowCount: { type: 'integer', minimum: 1, maximum: 128, description: 'Rows in this section. Default and effective maximum depend on scale and the aggregate pixel budget. Follow returned page.next_row_start.' },
             scale: { type: 'number', description: 'Integer review-image scale (default 4)' },
             outDir: { type: 'string', description: 'Output directory (default Data/.mcp-tilecatalog/<tileset-id>/)' },
           },
@@ -1069,7 +1071,7 @@ class RPGMakerXPServer {
             entries: { type: 'array', items: { type: 'object' }, description: 'Reviewed regular-tile semantic entries' },
             objects: { type: 'array', items: { type: 'object' }, description: 'Reviewed rectangular multi-tile object definitions' },
             autotiles: { type: 'array', items: { type: 'object' }, description: 'Reviewed autotile-slot semantics' },
-            catalog: { type: 'object', description: 'Complete catalog JSON exported by the review page; replaces semantic maps while preserving trusted tileset identity' },
+            catalog: { type: 'object', description: 'Catalog JSON exported by a review page. Merges semantic entries by key by default; replace=true replaces them. Preserves trusted tileset identity.' },
             replace: { type: 'boolean', description: 'Replace instead of merge (default false)' },
           },
           required: ['tilesetId'],
@@ -1328,7 +1330,7 @@ class RPGMakerXPServer {
       case 'render_tileset_atlas':
         return await renderTools.renderTilesetAtlas(this.projectPath, args.tilesetId, { scale: args.scale, outPath: args.outPath });
       case 'create_tileset_identification_harness':
-        return await tilesetCatalogTools.createTilesetIdentificationHarness(this.projectPath, args.tilesetId, { scale: args.scale, outDir: args.outDir });
+        return await tilesetCatalogTools.createTilesetIdentificationHarness(this.projectPath, args.tilesetId, { scale: args.scale, outDir: args.outDir, rowStart: args.rowStart, rowCount: args.rowCount });
       case 'get_tileset_catalog':
         return await tilesetCatalogTools.getTilesetCatalog(this.projectPath, args.tilesetId);
       case 'save_tileset_catalog':

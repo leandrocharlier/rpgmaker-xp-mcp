@@ -48,6 +48,7 @@ interface EngineTileFact {
 }
 
 interface HarnessManifest {
+  page?: { row_start: number; row_count: number; total_rows: number; next_row_start: number | null; id_range: [number, number] };
   schema_version: number;
   generated_at: string;
   tileset: {
@@ -190,12 +191,18 @@ function tileHints(priority: number, passage: number, alpha: AlphaStats): string
   return hints;
 }
 
-async function buildManifest(projectPath: string, tilesetId: number): Promise<{ manifest: HarnessManifest; image: Canvas; ts: any }> {
+async function buildManifest(projectPath: string, tilesetId: number, range?: { rowStart?: number; rowCount?: number; maxRows: number }): Promise<{ manifest: HarnessManifest; image: Canvas; ts: any }> {
   const { ts, image, sourcePath, cols, rows } = await loadTileset(projectPath, tilesetId);
+  const start = range?.rowStart ?? 0;
+  const count = range?.rowCount ?? Math.min(rows - start, range?.maxRows ?? rows);
+  if (!Number.isInteger(start) || start < 0 || start >= rows || !Number.isInteger(count) || count < 1 || start + count > rows || count > (range?.maxRows ?? rows)) {
+    throw new Error(`Invalid row range; rowStart must be within the sheet and rowCount at most ${range?.maxRows ?? rows} and within remaining rows`);
+  }
+  const page: HarnessManifest['page'] = range ? { row_start: start, row_count: count, total_rows: rows, next_row_start: start + count < rows ? start + count : null, id_range: [384 + start * cols, 384 + (start + count) * cols - 1] } : undefined;
   const priorities: number[] = ts.priorities?.data ?? [];
   const passages: number[] = ts.passages?.data ?? [];
   const regularTiles: EngineTileFact[] = [];
-  for (let row = 0; row < rows; row++) {
+  for (let row = start; row < start + count; row++) {
     for (let col = 0; col < cols; col++) {
       const id = 384 + row * cols + col;
       const tile = crop(image, col * 32, row * 32, 32, 32);
@@ -238,6 +245,7 @@ async function buildManifest(projectPath: string, tilesetId: number): Promise<{ 
   return {
     ts, image,
     manifest: {
+      ...(page ? { page } : {}),
       schema_version: SCHEMA_VERSION,
       generated_at: new Date().toISOString(),
       tileset: {
@@ -285,7 +293,7 @@ async function readCatalog(projectPath: string, tilesetId: number, fallback?: Ha
 }
 
 function summary(catalog: TilesetCatalog, manifest: HarnessManifest) {
-  const reviewed = Object.keys(catalog.tiles ?? {}).length;
+  const reviewed = manifest.regular_tiles.filter(t => catalog.tiles?.[String(t.id)]).length;
   return {
     regular_tiles: manifest.regular_tiles.length,
     reviewed_tiles: reviewed,
@@ -309,7 +317,7 @@ function harnessHtml(manifest: HarnessManifest, catalog: TilesetCatalog): string
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tileset ${manifest.tileset.id} identification harness</title>
 <style>
-:root{color-scheme:dark;font-family:ui-monospace,Consolas,monospace}body{margin:0;background:#11151a;color:#e6edf3}header{padding:14px 18px;background:#1b222b;position:sticky;top:0;z-index:20;border-bottom:1px solid #39424e}h1{font-size:18px;margin:0 0 6px}.sub{color:#9fb0c3;font-size:12px}.layout{display:grid;grid-template-columns:minmax(600px,1fr) 390px;gap:14px;padding:14px}.panel{background:#171d24;border:1px solid #343e49;border-radius:8px;padding:12px}.source-wrap{overflow:auto;max-height:72vh}.source{position:relative;width:${manifest.tileset.cols * 64}px;height:${manifest.tileset.rows * 64}px;background:#bbb}.source>img{width:100%;height:100%;image-rendering:pixelated}.hit{position:absolute;width:64px;height:64px;border:1px solid rgba(255,255,255,.12);box-sizing:border-box;cursor:pointer}.hit:hover{border:2px solid #62d2ff}.hit.selected{border:3px solid #ffcf4a;background:rgba(255,207,74,.12)}.hit.reviewed:after{content:'OK';position:absolute;right:2px;bottom:1px;color:#74e39a;text-shadow:0 1px 2px #000;font-size:9px}.facts{font-size:12px;line-height:1.45;white-space:pre-wrap}.preview{display:flex;gap:10px;align-items:flex-start}.tile-img{width:128px;height:128px;image-rendering:pixelated;background-color:#ddd;background-image:linear-gradient(45deg,#aaa 25%,transparent 25%),linear-gradient(-45deg,#aaa 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#aaa 75%),linear-gradient(-45deg,transparent 75%,#aaa 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}.row-img{max-width:100%;image-rendering:pixelated;background:#bbb}label{display:block;font-size:11px;color:#9fb0c3;margin-top:8px}input,select,textarea,button{font:inherit;background:#0e1318;color:#e6edf3;border:1px solid #465260;border-radius:4px;padding:6px;box-sizing:border-box}input,select,textarea{width:100%}textarea{min-height:62px}button{cursor:pointer;margin:8px 5px 0 0}button.primary{background:#155f85}.toolbar{display:flex;flex-wrap:wrap;gap:6px}.toolbar button{margin:0}.warn{color:#ffcf4a}.good{color:#74e39a}.object-list{font-size:11px;max-height:140px;overflow:auto}.rule{font-size:11px;color:#b6c4d2;margin:3px 0}@media(max-width:1050px){.layout{grid-template-columns:1fr}.source-wrap{max-height:55vh}}
+:root{color-scheme:dark;font-family:ui-monospace,Consolas,monospace}body{margin:0;background:#11151a;color:#e6edf3}header{padding:14px 18px;background:#1b222b;position:sticky;top:0;z-index:20;border-bottom:1px solid #39424e}h1{font-size:18px;margin:0 0 6px}.sub{color:#9fb0c3;font-size:12px}.layout{display:grid;grid-template-columns:minmax(600px,1fr) 390px;gap:14px;padding:14px}.panel{background:#171d24;border:1px solid #343e49;border-radius:8px;padding:12px}.source-wrap{overflow:auto;max-height:72vh}.source{position:relative;width:${manifest.tileset.cols * 64}px;height:${(manifest.page?.row_count ?? manifest.tileset.rows) * 64}px;background:#bbb}.source>img{width:100%;height:100%;image-rendering:pixelated}.hit{position:absolute;width:64px;height:64px;border:1px solid rgba(255,255,255,.12);box-sizing:border-box;cursor:pointer}.hit:hover{border:2px solid #62d2ff}.hit.selected{border:3px solid #ffcf4a;background:rgba(255,207,74,.12)}.hit.reviewed:after{content:'OK';position:absolute;right:2px;bottom:1px;color:#74e39a;text-shadow:0 1px 2px #000;font-size:9px}.facts{font-size:12px;line-height:1.45;white-space:pre-wrap}.preview{display:flex;gap:10px;align-items:flex-start}.tile-img{width:128px;height:128px;image-rendering:pixelated;background-color:#ddd;background-image:linear-gradient(45deg,#aaa 25%,transparent 25%),linear-gradient(-45deg,#aaa 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#aaa 75%),linear-gradient(-45deg,transparent 75%,#aaa 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}.row-img{max-width:100%;image-rendering:pixelated;background:#bbb}label{display:block;font-size:11px;color:#9fb0c3;margin-top:8px}input,select,textarea,button{font:inherit;background:#0e1318;color:#e6edf3;border:1px solid #465260;border-radius:4px;padding:6px;box-sizing:border-box}input,select,textarea{width:100%}textarea{min-height:62px}button{cursor:pointer;margin:8px 5px 0 0}button.primary{background:#155f85}.toolbar{display:flex;flex-wrap:wrap;gap:6px}.toolbar button{margin:0}.warn{color:#ffcf4a}.good{color:#74e39a}.object-list{font-size:11px;max-height:140px;overflow:auto}.rule{font-size:11px;color:#b6c4d2;margin:3px 0}@media(max-width:1050px){.layout{grid-template-columns:1fr}.source-wrap{max-height:55vh}}
 .autotiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.autotile{font-size:11px;background:#10161c;padding:8px;border-radius:5px}.autotile img{max-width:100%;max-height:160px;image-rendering:pixelated;background:#bbb}
 </style></head><body>
 <header><h1>Tileset ${manifest.tileset.id}: ${escapeHtml(manifest.tileset.database_name || manifest.tileset.graphic_name)}</h1><div class="sub">Click a tile. Ctrl-click selects multiple adjacent tiles. Engine facts are evidence; creator semantics are the reviewed truth.</div></header>
@@ -335,8 +343,8 @@ const manifest=${jsonForHtml(manifest)};const initial=${jsonForHtml(catalog)};co
 let catalog=(()=>{try{return JSON.parse(localStorage.getItem(key))||initial}catch{return initial}})();
 catalog.tiles||={};catalog.objects||={};catalog.autotiles||={};let selected=new Set();
 const $=id=>document.getElementById(id),source=$('source');
-for(const t of manifest.regular_tiles){const d=document.createElement('div');d.className='hit';d.style.left=(t.col*64)+'px';d.style.top=(t.row*64)+'px';d.dataset.id=t.id;d.title=String(t.id);d.onclick=e=>selectTile(t.id,e.ctrlKey||e.metaKey);source.appendChild(d)}
-function persist(){catalog.updated_at=new Date().toISOString();localStorage.setItem(key,JSON.stringify(catalog));renderMarks();renderObjects();$('status').textContent=Object.keys(catalog.tiles).length+'/'+manifest.regular_tiles.length+' reviewed'}
+for(const t of manifest.regular_tiles){const d=document.createElement('div');d.className='hit';d.style.left=(t.col*64)+'px';d.style.top=((t.row-(manifest.page?.row_start??0))*64)+'px';d.dataset.id=t.id;d.title=String(t.id);d.onclick=e=>selectTile(t.id,e.ctrlKey||e.metaKey);source.appendChild(d)}
+function persist(){catalog.updated_at=new Date().toISOString();localStorage.setItem(key,JSON.stringify(catalog));renderMarks();renderObjects();$('status').textContent=manifest.regular_tiles.filter(t=>catalog.tiles[t.id]).length+'/'+manifest.regular_tiles.length+' reviewed'}
 function renderMarks(){document.querySelectorAll('.hit').forEach(d=>{const id=d.dataset.id;d.classList.toggle('selected',selected.has(Number(id)));d.classList.toggle('reviewed',!!catalog.tiles[id])})}
 function selectTile(id,multi){if(!multi)selected.clear();if(multi&&selected.has(id))selected.delete(id);else selected.add(id);renderMarks();loadEditor(id)}
 function loadEditor(id){const t=manifest.regular_tiles.find(x=>x.id===id);if(!t)return;const a=catalog.tiles[id]||{};$('tileTitle').textContent='Tile '+id+' (row '+t.row+', col '+t.col+')';$('tileImage').src=t.image;$('rowImage').src=t.row_image;$('facts').textContent='priority: '+t.priority+'\npassage: '+t.passage_raw+'\nblocked: '+(t.blocked_directions.join(', ')||'none')+'\nalpha coverage: '+t.alpha.coverage+'\nbbox: '+JSON.stringify(t.alpha.bbox)+'\n'+t.engine_hints.join('\n');for(const f of ['label','category','placement','objectId','objectPart','confidence','usage','notes']){const k=f==='objectId'?'object_id':f==='objectPart'?'object_part':f;$(f).value=a[k]??(f==='category'||f==='placement'||f==='confidence'?'unknown':'')}$('layer').value=a.recommended_layer??''}
@@ -369,20 +377,28 @@ Engine facts live in \`manifest.json\`. Human semantics live in \`catalog.json\`
 export async function createTilesetIdentificationHarness(
   projectPath: string,
   tilesetId: number,
-  opts: { scale?: number; outDir?: string } = {},
+  opts: { scale?: number; outDir?: string; rowStart?: number; rowCount?: number } = {},
 ): Promise<any> {
-  const scale = Math.max(2, Math.min(8, Math.floor(opts.scale ?? 4)));
-  const { manifest, image } = await buildManifest(projectPath, tilesetId);
-  const dir = exportPath(projectPath, '.mcp-tilecatalog', opts.outDir || catalogDir(projectPath, tilesetId));
+  const scale = opts.scale ?? 4;
+  if (!Number.isInteger(scale) || scale < 1 || scale > 8) throw new Error('Scale must be an integer from 1 to 8');
+  // Source + 2x labeled sheet + tile/row copies: bound aggregate regular raster
+  // work as well as each canvas. Existing file/transaction limits still apply.
+  const maxRows = Math.min(128, Math.floor((16 * 1024 * 1024) / (256 * 32 * (5 + 2 * scale * scale))));
+  const { manifest, image } = await buildManifest(projectPath, tilesetId, { ...opts, maxRows });
+  const page = manifest.page!;
+  const partial = page.row_count !== page.total_rows;
+  const base = catalogDir(projectPath, tilesetId);
+  const dir = exportPath(projectPath, '.mcp-tilecatalog', opts.outDir || (partial ? join(base, `rows-${page.row_start}-${page.row_start + page.row_count - 1}`) : base));
   const tilesDir = join(dir, 'tiles'), rowsDir = join(dir, 'rows'), autotilesDir = join(dir, 'autotiles');
   await mkdir(tilesDir, { recursive: true });
   await mkdir(rowsDir, { recursive: true });
   await mkdir(autotilesDir, { recursive: true });
-  await writeFile(join(dir, 'source.png'), encodePng(image));
-  const labeledSource = scaleCanvas(image, 2);
+  const sourceSection = crop(image, 0, page.row_start * 32, image.width, page.row_count * 32);
+  await writeFile(join(dir, 'source.png'), encodePng(sourceSection));
+  const labeledSource = scaleCanvas(sourceSection, 2);
   drawGrid(labeledSource, 64, [0, 0, 0, 120]);
   for (const fact of manifest.regular_tiles) {
-    drawLabel(labeledSource, fact.col * 64 + 3, fact.row * 64 + 3, String(fact.id), 1, [255, 255, 160]);
+    drawLabel(labeledSource, fact.col * 64 + 3, (fact.row - page.row_start) * 64 + 3, String(fact.id), 1, [255, 255, 160]);
   }
   await writeFile(join(dir, 'source-labeled.png'), encodePng(labeledSource));
 
@@ -390,7 +406,7 @@ export async function createTilesetIdentificationHarness(
     const tile = crop(image, fact.col * 32, fact.row * 32, 32, 32);
     await writeFile(join(tilesDir, `${fact.id}.png`), encodePng(scaleCanvas(tile, scale)));
   }
-  for (let row = 0; row < manifest.tileset.rows; row++) {
+  for (let row = page.row_start; row < page.row_start + page.row_count; row++) {
     const sourceRow = crop(image, 0, row * 32, image.width, 32);
     const rendered = scaleCanvas(sourceRow, scale);
     drawGrid(rendered, 32 * scale, [0, 0, 0, 100]);
@@ -423,6 +439,7 @@ export async function createTilesetIdentificationHarness(
 
   return {
     directory: dir,
+    page,
     review_page: join(dir, 'index.html'),
     manifest: join(dir, 'manifest.json'),
     catalog: join(dir, 'catalog.json'),
@@ -431,6 +448,7 @@ export async function createTilesetIdentificationHarness(
     tileset: manifest.tileset,
     summary: summary(catalog, manifest),
     workflow: [
+      'Use page.next_row_start as rowStart for the next section. Tile IDs and row numbers remain global. Merge exports with save_tileset_catalog (replace=false).',
       'Review the labeled source adjacency and isolated tile before labeling.',
       'Group only visually confirmed rectangular multi-tile objects.',
       'Persist exported annotations with save_tileset_catalog.',
@@ -459,9 +477,9 @@ function mergeCatalog(base: TilesetCatalog, args: any): TilesetCatalog {
     return {
       ...base,
       updated_at: new Date().toISOString(),
-      tiles: { ...(imported.tiles ?? {}) },
-      objects: { ...(imported.objects ?? {}) },
-      autotiles: { ...(imported.autotiles ?? {}) },
+      tiles: { ...(args.replace ? {} : base.tiles), ...(imported.tiles ?? {}) },
+      objects: { ...(args.replace ? {} : base.objects), ...(imported.objects ?? {}) },
+      autotiles: { ...(args.replace ? {} : base.autotiles), ...(imported.autotiles ?? {}) },
     };
   }
   const catalog: TilesetCatalog = args.replace

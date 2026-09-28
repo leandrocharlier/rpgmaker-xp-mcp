@@ -9,8 +9,8 @@ The catalog workflow keeps three kinds of information separate:
 1. **Engine facts** are generated from `Tilesets.rxdata` and the source PNG:
    tile ID, row/column, priority, passage flags, bush/counter flags, alpha
    coverage, alpha bounds, and edge coverage.
-2. **Visual evidence** preserves source adjacency: the unmodified full sheet, a
-   labeled full sheet with burned-in tile IDs, exact source rows, isolated tiles
+2. **Visual evidence** preserves source adjacency: the unmodified sheet section, a
+   labeled section with burned-in tile IDs, exact source rows, isolated tiles
    on transparency, and autotile source graphics.
 3. **Creator semantics** are reviewed claims: label, category, intended use,
    placement mode, recommended layer, multi-tile object membership, evidence,
@@ -32,6 +32,37 @@ The catalog workflow keeps three kinds of information separate:
    `autotiles` arrays.
 7. Run `validate_tileset_catalog`. Use `strict: true` when a tileset is intended
    to drive automatic map authoring.
+
+## Tall tilesets and sections
+
+The harness automatically limits each export to a safe section. Use `rowStart`
+(zero-based) and optional `rowCount` to choose source rows, for example:
+
+```json
+{ "tilesetId": 1, "scale": 1, "rowStart": 128, "rowCount": 32 }
+```
+
+Read the returned `page.row_start`, `page.row_count`, `page.total_rows`,
+`page.id_range`, and `page.next_row_start`. Continue with `rowStart` equal to
+`next_row_start` until it is null. IDs and manifest row numbers remain global;
+the source PNGs are exact crops and HTML hit targets account for the offset.
+Default section directories are `Data/.mcp-tilecatalog/<id>/rows-<first>-<last>`.
+Explicit `outDir` still must stay inside the catalog export root; reuse will
+replace that section's outputs, so use separate directories for separate pages.
+
+`scale: 1` is honored for isolated tiles and row strips. The labeled source
+uses 2x for readable IDs. The effective row-count maximum is the smaller of 128
+and the count fitting a 16-megapixel aggregate regular-image budget (source,
+labeled source, isolated tiles, and strips). Larger scales allow fewer rows;
+omit `rowCount` for automatic sizing. The source PNG, every generated image,
+and the 128 MiB staged-write limit retain their existing safety limits. This
+does not add pagination to `render_tileset_atlas`; use the harness for tall sheets.
+
+Save section exports with `save_tileset_catalog` and `replace: false` (default).
+Imported tile/object/autotile entries merge by key into the canonical catalog;
+`replace: true` explicitly discards existing entries. Strict validation still
+covers the entire tileset. Request overlapping sections when an object crosses
+a page boundary so its full shape can be reviewed together.
 
 ## Agent-assisted review
 
