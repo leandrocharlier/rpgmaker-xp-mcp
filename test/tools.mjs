@@ -191,8 +191,8 @@ await check('backups created in Data/.mcp-backup', async () => {
   const bak = join(PROJECT, 'Data', '.mcp-backup');
   const files = (await import('fs/promises')).readdir(bak);
   const names = await files;
-  assert(names.includes('Actors.rxdata.bak'), 'Actors backup exists');
-  assert(names.includes('System.rxdata.bak'), 'System backup exists');
+  assert(names.some(n => /^Actors\.rxdata\..+\.bak$/.test(n)), 'Actors backup exists');
+  assert(names.some(n => /^System\.rxdata\..+\.bak$/.test(n)), 'System backup exists');
   return { backups: names.length };
 });
 

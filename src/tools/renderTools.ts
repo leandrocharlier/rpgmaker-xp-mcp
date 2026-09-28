@@ -1,5 +1,5 @@
 import { join } from 'path';
-import { mkdir, writeFile } from 'fs/promises';
+import { safeMkdir as mkdir, atomicWriteFile as writeFile, exportPath } from '../utils/security.js';
 import { readRxdataFile } from '../utils/rxdata.js';
 import { getMapPath, getDataPath } from '../utils/fileHandler.js';
 import {
@@ -20,6 +20,8 @@ async function decodeCached(path: string): Promise<Canvas> {
   let img = decodeCache.get(path);
   if (!img) {
     img = await decodePng(path);
+    const cachedBytes = [...decodeCache.values()].reduce((n, c) => n + c.data.byteLength, 0);
+    if (decodeCache.size >= 8 || cachedBytes + img.data.byteLength > 64 * 1024 * 1024) decodeCache.clear();
     decodeCache.set(path, img);
   }
   return img;
@@ -91,7 +93,8 @@ export async function renderTilesetAtlas(
 
   const dir = join(projectPath, 'Data', '.mcp-preview');
   await mkdir(dir, { recursive: true });
-  const file = opts.outPath || join(dir, `tileset${String(tilesetId).padStart(3, '0')}-atlas.png`);
+  const file = exportPath(projectPath, '.mcp-preview', opts.outPath || join(dir, `tileset${String(tilesetId).padStart(3, '0')}-atlas.png`));
+  if (!file.toLowerCase().endsWith('.png')) throw new Error('Preview must be a PNG');
   await writeFile(file, encodePng(atlas));
 
   return {
@@ -262,7 +265,8 @@ export async function renderMap(
 
   const dir = join(projectPath, 'Data', '.mcp-preview');
   await mkdir(dir, { recursive: true });
-  const file = outPath || join(dir, `map${String(mapId).padStart(3, '0')}.png`);
+  const file = exportPath(projectPath, '.mcp-preview', outPath || join(dir, `map${String(mapId).padStart(3, '0')}.png`));
+  if (!file.toLowerCase().endsWith('.png')) throw new Error('Preview must be a PNG');
   await writeFile(file, encodePng(out));
 
   return {

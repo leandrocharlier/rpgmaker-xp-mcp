@@ -1,8 +1,8 @@
 {
   "name": "rpgmaker-xp-mcp",
-  "version": "1.1.3",
+  "version": "1.1.4-security.1",
   "mcpName": "io.github.SerifeusStudio/rpgmaker-xp-mcp",
-  "description": "Author RPG Maker XP games in natural language — an MCP server that reads, writes, and renders RGSS1 .rxdata projects (actors, skills, items, maps, events, scripts) directly.",
+  "description": "Author RPG Maker XP games in natural language \u00e2\u20ac\u201d an MCP server that reads, writes, and renders RGSS1 .rxdata projects (actors, skills, items, maps, events, scripts) directly.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -19,7 +19,8 @@
     "SKILL_CREATION_GUIDE.md",
     "WISDOM.md",
     "THIRD-PARTY-NOTICES.md",
-    "research/*.md"
+    "research/*.md",
+    "SECURITY.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -48,7 +49,7 @@
     "url": "https://github.com/SerifeusStudio/rpgmaker-xp-mcp/issues"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "pngjs": "^7.0.0"
   },
   "devDependencies": {

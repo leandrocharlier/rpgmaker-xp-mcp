@@ -43,6 +43,8 @@ export interface LoadOptions {
 }
 
 class Loader {
+  depth_ = 0;
+  nodes_ = 0;
   declare pos_: number;
   declare view_: DataView;
   declare symbols_: symbol[];
@@ -84,7 +86,7 @@ const read_byte = (p: Loader): number => {
 };
 
 const read_bytes = (p: Loader, n: number) => {
-  if (p.pos_ + n > p.view_.byteLength) {
+  if (!Number.isSafeInteger(n) || n < 0 || p.pos_ + n > p.view_.byteLength) {
     throw new TypeError("marshal data too short");
   }
   return new Uint8Array(p.view_.buffer, p.view_.byteOffset + (p.pos_ += n) - n, n);
@@ -167,7 +169,17 @@ const ivar_set = (o: {}, k: unknown, v: unknown, ivar2str?: boolean | string) =>
   }
 };
 
+const checkedLength = (n: number): number => {
+  if (!Number.isSafeInteger(n) || n < 0 || n > 1000000) throw new Error('Marshal array exceeds safety limits');
+  return n;
+};
+
 const read_any = (p: Loader): unknown => {
+  if (++p.nodes_ > 1000000 || ++p.depth_ > 128) throw new Error('Marshal exceeds safety limits');
+  try { return read_any_inner(p); } finally { p.depth_--; }
+};
+
+const read_any_inner = (p: Loader): unknown => {
   var t = read_byte(p);
   var string = p.options_.string;
   var numeric = p.options_.numeric === "wrap";
@@ -229,7 +241,7 @@ const read_any = (p: Loader): unknown => {
       return o;
 
     case constants.T_ARRAY:
-      for (var n = read_fixnum(p), a = push_object(p, Array(n)) as unknown[], i = 0; i < n; ++i)
+      for (var n = read_fixnum(p), a = push_object(p, Array(checkedLength(n))) as unknown[], i = 0; i < n; ++i)
         a[i] = read_any(p);
       return a;
 

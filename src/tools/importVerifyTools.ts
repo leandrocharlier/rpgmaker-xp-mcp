@@ -1,5 +1,5 @@
 import { join, basename } from 'path';
-import { mkdirSync, writeFileSync } from 'fs';
+import { safeMkdir, atomicWriteFile, previewDirectory, contained } from '../utils/security.js';
 import { decodePng, encodePng, makeCanvas, blit, Canvas } from '../utils/tiles.js';
 import { readRxdataFile, writeRxdataFile, getDataPath } from '../utils/fileHandler.js';
 
@@ -249,10 +249,10 @@ export async function verifyTileset(
   drawGrid(up, 32 * scale, [255, 0, 0, 200]);                 // RMXP 32px grid (red)
   if (detected.tile !== 32) drawGrid(up, detected.tile * scale, [0, 220, 255, 200]); // content grid (cyan)
 
-  const outDir = opts.outDir ?? join(process.env.TEMP || '.', 'rmxp-verify');
-  mkdirSync(outDir, { recursive: true });
+  const outDir = contained(previewDirectory(), opts.outDir ?? join(previewDirectory(), 'verify'));
+  await safeMkdir(outDir);
   const out = join(outDir, basename(filePath).replace(/\.[^.]+$/, '') + '_verify.png');
-  writeFileSync(out, encodePng(up));
+  await atomicWriteFile(out, encodePng(up));
 
   const aligned = detected.tile === 32;
   return {
@@ -289,7 +289,7 @@ export async function registerTileset(
   args: { graphicName: string; name?: string; autotileNames?: string[]; force?: boolean }
 ): Promise<any> {
   const graphicsDir = join(projectPath, 'Graphics', 'Tilesets');
-  const file = join(graphicsDir, args.graphicName.replace(/\.[^.]+$/, '') + '.png');
+  const file = contained(graphicsDir, join(graphicsDir, args.graphicName.replace(/\.[^.]+$/, '') + '.png'));
 
   let verdict: any;
   try { verdict = await classifyAsset(file); }

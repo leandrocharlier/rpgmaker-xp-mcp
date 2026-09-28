@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises';
+import { readLimited as readFile, canvasBudget, contained } from './security.js';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { PNG } from 'pngjs';
@@ -18,12 +18,16 @@ export interface Canvas {
 
 /** Decode a PNG to RGBA. pngjs expands palette + tRNS transparency for us. */
 export async function decodePng(path: string): Promise<Canvas> {
-  const png = PNG.sync.read(await readFile(path));
+  const bytes = await readFile(path);
+  if (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('Invalid PNG');
+  canvasBudget(bytes.readUInt32BE(16), bytes.readUInt32BE(20));
+  const png = PNG.sync.read(bytes);
   return { width: png.width, height: png.height, data: png.data };
 }
 
 /** Encode an RGBA canvas to a PNG buffer. */
 export function encodePng(c: Canvas): Buffer {
+  canvasBudget(c.width, c.height);
   const png = new PNG({ width: c.width, height: c.height });
   png.data = Buffer.from(c.data.buffer, c.data.byteOffset, c.data.byteLength);
   return PNG.sync.write(png);
@@ -31,6 +35,7 @@ export function encodePng(c: Canvas): Buffer {
 
 /** A new, fully-transparent canvas. */
 export function makeCanvas(width: number, height: number): Canvas {
+  canvasBudget(width, height);
   return { width, height, data: new Uint8Array(width * height * 4) };
 }
 
@@ -175,7 +180,7 @@ export function resolveGraphic(
   if (!name) return null;
   const file = name.toLowerCase().endsWith('.png') ? name : `${name}.png`;
   for (const base of [join(projectPath, 'Graphics', subdir), join(rtpPath, 'Graphics', subdir)]) {
-    const p = join(base, file);
+    const p = contained(base, join(base, file));
     if (existsSync(p)) return p;
   }
   return null;

@@ -28,7 +28,7 @@ async function loadScripts(projectPath: string): Promise<RawScript[]> {
 }
 
 function decodeSource(deflated: Uint8Array): string {
-  return inflateSync(Buffer.from(deflated)).toString('utf8');
+  return inflateSync(Buffer.from(deflated), { maxOutputLength: 4 * 1024 * 1024 }).toString('utf8');
 }
 
 function encodeSource(code: string): Uint8Array {
@@ -42,11 +42,13 @@ export async function getScripts(
   projectPath: string
 ): Promise<{ index: number; name: string; sourceLength: number }[]> {
   const scripts = await loadScripts(projectPath);
-  return scripts.map(([, title, code], index) => ({
-    index,
-    name: textDecoder.decode(title),
-    sourceLength: inflateSync(Buffer.from(code)).length,
-  }));
+  let total = 0;
+  return scripts.map(([, title, code], index) => {
+    const sourceLength = inflateSync(Buffer.from(code), { maxOutputLength: 4 * 1024 * 1024 }).length;
+    total += sourceLength;
+    if (total > 64 * 1024 * 1024) throw new Error('Scripts exceed the 64 MiB budget');
+    return { index, name: textDecoder.decode(title), sourceLength };
+  });
 }
 
 /**
@@ -108,19 +110,24 @@ export async function createScript(
 }
 
 /**
- * Search script sources for a string or regex pattern
+ * Search script sources for a literal string
  */
 export async function searchScripts(
   projectPath: string,
   pattern: string
 ): Promise<{ index: number; name: string; line: number; text: string }[]> {
   const scripts = await loadScripts(projectPath);
-  const regex = new RegExp(pattern);
+  if (typeof pattern !== 'string' || pattern.length > 1024) throw new Error('Search text must be at most 1024 characters');
+  let total = 0;
   const matches: { index: number; name: string; line: number; text: string }[] = [];
   scripts.forEach(([, title, code], index) => {
-    const lines = decodeSource(code).split('\n');
+    const source = decodeSource(code);
+    total += source.length;
+    if (total > 64 * 1024 * 1024) throw new Error('Script search exceeds the 64 MiB budget');
+    const lines = source.split('\n');
     lines.forEach((text, i) => {
-      if (regex.test(text)) {
+      if (text.includes(pattern)) {
+        if (matches.length >= 10000) throw new Error('Too many matches; use a more specific search');
         matches.push({ index, name: textDecoder.decode(title), line: i + 1, text: text.trimEnd() });
       }
     });

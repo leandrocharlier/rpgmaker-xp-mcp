@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'fs/promises';
+import { readLimited as readFile, atomicWriteFile as writeFile, checkValue } from './security.js';
 import { load, dump, RubyObject } from '../vendor/marshal/index.js';
 
 /**
@@ -40,6 +40,7 @@ function decodeTable(bytes: Uint8Array): PlainTable {
   const ysize = view.getUint32(8, true);
   const zsize = view.getUint32(12, true);
   const items = view.getUint32(16, true);
+  if (items > 1000000 || bytes.length !== 20 + items * 2 || xsize * ysize * zsize !== items) throw new Error('Invalid or oversized Table');
   const data: number[] = new Array(items);
   for (let i = 0; i < items; i++) {
     data[i] = view.getInt16(20 + i * 2, true);
@@ -104,7 +105,9 @@ function encodeColorTone(value: PlainColorTone): RubyObject {
 // Generic conversion
 // ---------------------------------------------------------------------------
 
-export function toPlain(value: unknown): any {
+export function toPlain(value: unknown, depth = 0, budget = { nodes: 0 }): any {
+  if (depth > 64 || ++budget.nodes > 1000000) throw new Error('Marshal conversion exceeds safety limits');
+  const convert = (v: unknown) => toPlain(v, depth + 1, budget);
   if (
     value === null ||
     typeof value === 'number' ||
@@ -121,14 +124,15 @@ export function toPlain(value: unknown): any {
     return Symbol.keyFor(value);
   }
   if (Array.isArray(value)) {
-    return value.map(toPlain);
+    return value.map(convert);
   }
   if (value instanceof Map) {
     // Ruby Hash — integer-keyed in XP data (map events, MapInfos)
     const obj: any = {};
     for (const [k, v] of value) {
       const key = k instanceof Uint8Array ? textDecoder.decode(k) : String(k);
-      obj[key] = toPlain(v);
+      if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Unsafe Marshal key');
+      obj[key] = convert(v);
     }
     return obj;
   }
@@ -145,7 +149,8 @@ export function toPlain(value: unknown): any {
     for (const sym of Object.getOwnPropertySymbols(value)) {
       const key = Symbol.keyFor(sym);
       if (!key || !key.startsWith('@')) continue;
-      obj[key.slice(1)] = toPlain((value as any)[sym]);
+      if (['__proto__', 'constructor', 'prototype'].includes(key.slice(1))) throw new Error('Unsafe Marshal key');
+      obj[key.slice(1)] = convert((value as any)[sym]);
     }
     return obj;
   }
@@ -212,8 +217,7 @@ export async function readRxdataFile<T>(filePath: string): Promise<T> {
  */
 export async function writeRxdataFile(filePath: string, data: any): Promise<void> {
   try {
-    const { backupBeforeWrite } = await import('./fileHandler.js');
-    await backupBeforeWrite(filePath);
+    checkValue(data);
     const bytes = dump(toRuby(data));
     await writeFile(filePath, bytes);
   } catch (error) {
@@ -237,8 +241,6 @@ export async function readRxdataRaw(filePath: string): Promise<unknown> {
 
 export async function writeRxdataRaw(filePath: string, value: unknown): Promise<void> {
   try {
-    const { backupBeforeWrite } = await import('./fileHandler.js');
-    await backupBeforeWrite(filePath);
     await writeFile(filePath, dump(value));
   } catch (error) {
     throw new Error(`Failed to write rxdata file ${filePath}: ${error}`);

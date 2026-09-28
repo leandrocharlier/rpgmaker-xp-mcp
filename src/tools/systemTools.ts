@@ -1,11 +1,11 @@
-import { readFile, writeFile } from 'fs/promises';
+import { readLimited, atomicWriteFile as writeFile } from '../utils/security.js';
+const readFile = async (path: string, encoding: BufferEncoding) => (await readLimited(path)).toString(encoding);
 import { randomInt } from 'crypto';
 import {
   readRxdataFile,
   writeRxdataFile,
   getDataPath,
   getGameIniPath,
-  backupBeforeWrite,
 } from '../utils/fileHandler.js';
 import { SystemData } from '../utils/types.js';
 
@@ -105,13 +105,13 @@ export async function getGameTitle(projectPath: string): Promise<string> {
  * Update the game title in Game.ini
  */
 export async function updateGameTitle(projectPath: string, title: string): Promise<void> {
+  if (typeof title !== 'string' || /[\r\n\0]/.test(title) || title.length > 256) throw new Error('Title must be a single line of at most 256 characters');
   const iniPath = getGameIniPath(projectPath);
   const ini = await readFile(iniPath, 'latin1');
   if (!/^\s*Title\s*=/m.test(ini)) {
     throw new Error('Title entry not found in Game.ini');
   }
-  const updated = ini.replace(/^(\s*Title\s*=).*$/m, `$1${title}`);
-  await backupBeforeWrite(iniPath);
+  const updated = ini.replace(/^(\s*Title\s*=).*$/m, (_match, prefix: string) => prefix + title);
   await writeFile(iniPath, updated, 'latin1');
 }
 

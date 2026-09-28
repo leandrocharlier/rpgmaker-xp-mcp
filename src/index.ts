@@ -10,6 +10,8 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import { SERVER_INSTRUCTIONS, listResources, readResource } from './resources.js';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
+import { checkValue, runProjectOperation, hardenSchema } from './utils/security.js';
 
 import { validateProjectPath } from './utils/fileHandler.js';
 import * as actorTools from './tools/actorTools.js';
@@ -39,12 +41,14 @@ const PROJECT_PATH = process.env.RPGMAKER_PROJECT_PATH || '';
 class RPGMakerXPServer {
   private server: Server;
   private projectPath: string;
+  private definitions: Tool[] = [];
+  private validators = new Map<string, ReturnType<AjvJsonSchemaValidator['getValidator']>>();
 
   constructor() {
     this.server = new Server(
       {
         name: 'rpgmaker-xp-server',
-        version: '1.1.0',
+        version: '1.1.4-security.1',
       },
       {
         capabilities: {
@@ -59,6 +63,14 @@ class RPGMakerXPServer {
     );
 
     this.projectPath = PROJECT_PATH;
+    const provider = new AjvJsonSchemaValidator();
+    for (const tool of this.getToolDefinitions()) {
+      const schema: any = structuredClone(tool.inputSchema);
+      schema.additionalProperties = false;
+      hardenSchema(schema);
+      this.validators.set(tool.name, provider.getValidator(schema));
+      this.definitions.push({ ...tool, inputSchema: schema });
+    }
     this.setupHandlers();
     this.setupErrorHandling();
   }
@@ -78,7 +90,7 @@ class RPGMakerXPServer {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
-        tools: this.getToolDefinitions(),
+        tools: this.definitions,
       };
     });
 
@@ -104,10 +116,19 @@ class RPGMakerXPServer {
           );
         }
 
-        return await this.handleToolCall(request.params.name, request.params.arguments || {});
+        const args = request.params.arguments || {};
+        checkValue(args);
+        const validate = this.validators.get(request.params.name);
+        if (!validate) throw new Error('Unknown tool');
+        const checked = validate(args);
+        if (!checked.valid) throw new Error(`Invalid arguments: ${checked.errorMessage}`);
+        const mutates = !/^(get_|search_|validate_|classify_)/.test(request.params.name);
+        return await runProjectOperation(this.projectPath, process.env.RPGMAKER_RTP_PATH || 'C:/Program Files (x86)/Steam/steamapps/common/RPGXP/rtp', mutates,
+          () => this.handleToolCall(request.params.name, args));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         return {
+          isError: true,
           content: [
             {
               type: 'text',
@@ -817,11 +838,11 @@ class RPGMakerXPServer {
       },
       {
         name: 'search_scripts',
-        description: 'Search all RGSS script sources with a regex pattern; returns matching lines with script name and line number',
+        description: 'Search all RGSS script sources with literal text; returns matching lines with script name and line number',
         inputSchema: {
           type: 'object',
           properties: {
-            pattern: { type: 'string', description: 'Regular expression to search for' },
+            pattern: { type: 'string', description: 'Literal text to search for' },
           },
           required: ['pattern'],
         },
@@ -937,7 +958,7 @@ class RPGMakerXPServer {
           properties: {
             filePath: { type: 'string', description: 'Absolute path to the tileset PNG' },
             scale: { type: 'number', description: 'Integer upscale for legibility (1-4; default 2 for <=256px wide)' },
-            outDir: { type: 'string', description: 'Output directory for the preview PNG (default %TEMP%/rmxp-verify)' },
+            outDir: { type: 'string', description: 'Output directory for the preview PNG (default Data/.mcp-preview/verify)' },
           },
           required: ['filePath'],
         },

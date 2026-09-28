@@ -1,4 +1,6 @@
-import { access, mkdir, readFile, writeFile } from 'fs/promises';
+import { access } from 'fs/promises';
+import { safeMkdir as mkdir, atomicWriteFile as writeFile, readLimited, exportPath, assertId } from '../utils/security.js';
+const readFile = async (path: string, encoding: BufferEncoding) => (await readLimited(path)).toString(encoding);
 import { join } from 'path';
 import { readRxdataFile } from '../utils/rxdata.js';
 import { getDataPath } from '../utils/fileHandler.js';
@@ -85,6 +87,7 @@ async function exists(path: string): Promise<boolean> {
 }
 
 function padId(id: number): string {
+  assertId(id);
   return String(id).padStart(3, '0');
 }
 
@@ -296,21 +299,25 @@ function jsonForHtml(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e');
 }
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function harnessHtml(manifest: HarnessManifest, catalog: TilesetCatalog): string {
   const categories = [...CATEGORIES];
-  return `<!doctype html>
+  return String.raw`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tileset ${manifest.tileset.id} identification harness</title>
 <style>
 :root{color-scheme:dark;font-family:ui-monospace,Consolas,monospace}body{margin:0;background:#11151a;color:#e6edf3}header{padding:14px 18px;background:#1b222b;position:sticky;top:0;z-index:20;border-bottom:1px solid #39424e}h1{font-size:18px;margin:0 0 6px}.sub{color:#9fb0c3;font-size:12px}.layout{display:grid;grid-template-columns:minmax(600px,1fr) 390px;gap:14px;padding:14px}.panel{background:#171d24;border:1px solid #343e49;border-radius:8px;padding:12px}.source-wrap{overflow:auto;max-height:72vh}.source{position:relative;width:${manifest.tileset.cols * 64}px;height:${manifest.tileset.rows * 64}px;background:#bbb}.source>img{width:100%;height:100%;image-rendering:pixelated}.hit{position:absolute;width:64px;height:64px;border:1px solid rgba(255,255,255,.12);box-sizing:border-box;cursor:pointer}.hit:hover{border:2px solid #62d2ff}.hit.selected{border:3px solid #ffcf4a;background:rgba(255,207,74,.12)}.hit.reviewed:after{content:'OK';position:absolute;right:2px;bottom:1px;color:#74e39a;text-shadow:0 1px 2px #000;font-size:9px}.facts{font-size:12px;line-height:1.45;white-space:pre-wrap}.preview{display:flex;gap:10px;align-items:flex-start}.tile-img{width:128px;height:128px;image-rendering:pixelated;background-color:#ddd;background-image:linear-gradient(45deg,#aaa 25%,transparent 25%),linear-gradient(-45deg,#aaa 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#aaa 75%),linear-gradient(-45deg,transparent 75%,#aaa 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}.row-img{max-width:100%;image-rendering:pixelated;background:#bbb}label{display:block;font-size:11px;color:#9fb0c3;margin-top:8px}input,select,textarea,button{font:inherit;background:#0e1318;color:#e6edf3;border:1px solid #465260;border-radius:4px;padding:6px;box-sizing:border-box}input,select,textarea{width:100%}textarea{min-height:62px}button{cursor:pointer;margin:8px 5px 0 0}button.primary{background:#155f85}.toolbar{display:flex;flex-wrap:wrap;gap:6px}.toolbar button{margin:0}.warn{color:#ffcf4a}.good{color:#74e39a}.object-list{font-size:11px;max-height:140px;overflow:auto}.rule{font-size:11px;color:#b6c4d2;margin:3px 0}@media(max-width:1050px){.layout{grid-template-columns:1fr}.source-wrap{max-height:55vh}}
 .autotiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.autotile{font-size:11px;background:#10161c;padding:8px;border-radius:5px}.autotile img{max-width:100%;max-height:160px;image-rendering:pixelated;background:#bbb}
 </style></head><body>
-<header><h1>Tileset ${manifest.tileset.id}: ${manifest.tileset.database_name || manifest.tileset.graphic_name}</h1><div class="sub">Click a tile. Ctrl-click selects multiple adjacent tiles. Engine facts are evidence; creator semantics are the reviewed truth.</div></header>
+<header><h1>Tileset ${manifest.tileset.id}: ${escapeHtml(manifest.tileset.database_name || manifest.tileset.graphic_name)}</h1><div class="sub">Click a tile. Ctrl-click selects multiple adjacent tiles. Engine facts are evidence; creator semantics are the reviewed truth.</div></header>
 <div class="layout"><main>
 <section class="panel"><div class="toolbar"><button id="clearSel">Clear selection</button><button id="export">Export catalog JSON</button><label style="margin:0"><input id="import" type="file" accept="application/json" style="width:220px"></label><span id="status" class="sub"></span></div></section>
 <section class="panel"><h2>Labeled source sheet</h2><div class="source-wrap"><div id="source" class="source"><img src="source-labeled.png" alt="tileset source with tile ids"></div></div></section>
 <section class="panel"><h2>Exact source row</h2><img id="rowImage" class="row-img" alt="selected source row"></section>
-<section class="panel"><h2>Autotile sources</h2><div class="autotiles">${manifest.autotiles.map(a => `<div class="autotile"><b>Slot ${a.slot} / base ${a.base_id}</b><br>${a.name || 'unused'}${a.image ? `<br><img src="${a.image}" alt="autotile slot ${a.slot}">` : ''}<br>${a.engine_hints.join('<br>')}</div>`).join('')}</div></section>
+<section class="panel"><h2>Autotile sources</h2><div class="autotiles">${manifest.autotiles.map(a => `<div class="autotile"><b>Slot ${a.slot} / base ${a.base_id}</b><br>${escapeHtml(a.name || 'unused')}${a.image ? `<br><img src="${a.image}" alt="autotile slot ${a.slot}">` : ''}<br>${a.engine_hints.join('<br>')}</div>`).join('')}</div></section>
 <section class="panel"><h2>Review rules</h2>${manifest.review_rules.map(r => `<div class="rule">* ${r}</div>`).join('')}</section>
 </main><aside>
 <section class="panel"><h2 id="tileTitle">Select a tile</h2><div class="preview"><img id="tileImage" class="tile-img"><div id="facts" class="facts"></div></div>
@@ -335,7 +342,7 @@ function selectTile(id,multi){if(!multi)selected.clear();if(multi&&selected.has(
 function loadEditor(id){const t=manifest.regular_tiles.find(x=>x.id===id);if(!t)return;const a=catalog.tiles[id]||{};$('tileTitle').textContent='Tile '+id+' (row '+t.row+', col '+t.col+')';$('tileImage').src=t.image;$('rowImage').src=t.row_image;$('facts').textContent='priority: '+t.priority+'\npassage: '+t.passage_raw+'\nblocked: '+(t.blocked_directions.join(', ')||'none')+'\nalpha coverage: '+t.alpha.coverage+'\nbbox: '+JSON.stringify(t.alpha.bbox)+'\n'+t.engine_hints.join('\n');for(const f of ['label','category','placement','objectId','objectPart','confidence','usage','notes']){const k=f==='objectId'?'object_id':f==='objectPart'?'object_part':f;$(f).value=a[k]??(f==='category'||f==='placement'||f==='confidence'?'unknown':'')}$('layer').value=a.recommended_layer??''}
 $('apply').onclick=()=>{for(const id of selected){catalog.tiles[id]={id,label:$('label').value.trim(),category:$('category').value,placement:$('placement').value,recommended_layer:$('layer').value===''?null:($('layer').value==='event'?'event':Number($('layer').value)),object_id:$('objectId').value.trim()||null,object_part:$('objectPart').value.trim()||null,confidence:$('confidence').value,usage:$('usage').value.trim(),notes:$('notes').value.trim()}}persist()};
 $('makeObject').onclick=()=>{const id=$('objectId').value.trim();if(!id||!selected.size){alert('Select adjacent tiles and enter an Object ID first.');return}const ts=[...selected].map(n=>manifest.regular_tiles.find(t=>t.id===n));const minR=Math.min(...ts.map(t=>t.row)),maxR=Math.max(...ts.map(t=>t.row)),minC=Math.min(...ts.map(t=>t.col)),maxC=Math.max(...ts.map(t=>t.col));const grid=Array.from({length:maxR-minR+1},()=>Array(maxC-minC+1).fill(null));for(const t of ts)grid[t.row-minR][t.col-minC]=t.id;const layer=$('layer').value;catalog.objects[id]={id,label:$('label').value.trim()||id,category:$('category').value,recommended_layer:layer===''?null:(layer==='event'?'event':Number(layer)),confidence:$('confidence').value,usage:$('usage').value.trim(),notes:$('notes').value.trim(),grid};for(const t of ts){catalog.tiles[t.id]={...(catalog.tiles[t.id]||{id:t.id}),object_id:id,placement:'object_part'}}persist()};
-function renderObjects(){$('objects').innerHTML=Object.values(catalog.objects).map(o=>'<div><b>'+o.id+'</b> '+(o.label||'')+' '+(o.grid?.[0]?.length||0)+'x'+(o.grid?.length||0)+'</div>').join('')||'<span class="sub">No object groups yet.</span>'}
+function renderObjects(){const root=$('objects');root.replaceChildren();for(const o of Object.values(catalog.objects)){const d=document.createElement('div');d.textContent=String(o.id)+' '+String(o.label||'')+' '+(o.grid?.[0]?.length||0)+'x'+(o.grid?.length||0);root.appendChild(d)}if(!root.childNodes.length)root.textContent='No object groups yet.'}
 $('clearSel').onclick=()=>{selected.clear();renderMarks()};$('export').onclick=()=>{const b=new Blob([JSON.stringify(catalog,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='tileset'+String(manifest.tileset.id).padStart(3,'0')+'.catalog.json';a.click();URL.revokeObjectURL(a.href)};
 $('import').onchange=async e=>{catalog=JSON.parse(await e.target.files[0].text());persist()};persist();
 </script></body></html>`;
@@ -366,7 +373,7 @@ export async function createTilesetIdentificationHarness(
 ): Promise<any> {
   const scale = Math.max(2, Math.min(8, Math.floor(opts.scale ?? 4)));
   const { manifest, image } = await buildManifest(projectPath, tilesetId);
-  const dir = opts.outDir || catalogDir(projectPath, tilesetId);
+  const dir = exportPath(projectPath, '.mcp-tilecatalog', opts.outDir || catalogDir(projectPath, tilesetId));
   const tilesDir = join(dir, 'tiles'), rowsDir = join(dir, 'rows'), autotilesDir = join(dir, 'autotiles');
   await mkdir(tilesDir, { recursive: true });
   await mkdir(rowsDir, { recursive: true });

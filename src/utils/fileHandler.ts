@@ -1,28 +1,10 @@
-import { access, readdir, copyFile, mkdir } from 'fs/promises';
-import { join, extname, dirname, basename } from 'path';
+import { access, readdir } from 'fs/promises';
+import { join, extname } from 'path';
 
 export { readRxdataFile, writeRxdataFile } from './rxdata.js';
 
-/**
- * One-time-per-session backup: before the first write to a file, copy it
- * to a .mcp-backup folder next to it. Subsequent writes in the same server
- * session reuse the same backup, so the backup always reflects the state
- * before this session's edits.
- */
-const backedUp = new Set<string>();
-
-export async function backupBeforeWrite(filePath: string): Promise<void> {
-  if (backedUp.has(filePath)) return;
-  backedUp.add(filePath);
-  try {
-    await access(filePath);
-  } catch {
-    return; // nothing to back up (new file)
-  }
-  const backupDir = join(dirname(filePath), '.mcp-backup');
-  await mkdir(backupDir, { recursive: true });
-  await copyFile(filePath, join(backupDir, basename(filePath) + '.bak'));
-}
+import { contained, assertId, versionedBackup } from './security.js';
+export const backupBeforeWrite = versionedBackup;
 
 /**
  * List all files in a directory with a specific extension
@@ -40,13 +22,15 @@ export async function listFiles(dirPath: string, extension: string): Promise<str
  * Get the full path to a data file in an RPG Maker XP project
  */
 export function getDataPath(projectPath: string, fileName: string): string {
-  return join(projectPath, 'Data', fileName);
+  if (!/^[A-Za-z0-9_-]+\.rxdata$/.test(fileName)) throw new Error('Invalid data filename');
+  return contained(projectPath, join(projectPath, 'Data', fileName));
 }
 
 /**
  * Get the full path to a map file in an RPG Maker XP project
  */
 export function getMapPath(projectPath: string, mapId: number): string {
+  assertId(mapId);
   const fileName = `Map${String(mapId).padStart(3, '0')}.rxdata`;
   return getDataPath(projectPath, fileName);
 }
@@ -55,7 +39,7 @@ export function getMapPath(projectPath: string, mapId: number): string {
  * Get the full path to the project's Game.ini (holds the game title)
  */
 export function getGameIniPath(projectPath: string): string {
-  return join(projectPath, 'Game.ini');
+  return contained(projectPath, join(projectPath, 'Game.ini'));
 }
 
 /**
