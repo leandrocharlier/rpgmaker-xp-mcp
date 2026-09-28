@@ -122,6 +122,23 @@ implemented yet.
   verify both travel directions in the target runtime, transfer completion,
   restored player visibility, and released movement/direction locks. Preserve
   the intended side-entry artwork and route instead of assuming frontal access.
+  Do not generalize this blocked-cell activation to all player-touch events;
+  verify the applicable runtime and event behavior explicitly.
+
+Extend the reviewed object catalog with semantic building anchors: door, player
+approach cell/direction, and shadow/padding offsets, separate from image bounds.
+A placement plan/dry-run should align a replacement building's door anchor with
+an existing event while preserving that event's position and commands. For a
+5-by-5 building replaced by a 7-by-7 building with a different door offset,
+derive the graphic placement from the anchor, not just the bounding box. Report
+blocked anchor/approach tiles, footprint conflicts, and unresolved activation
+behavior before writing; never silently infer or overwrite collision flags.
+
+Use paired synthetic fixtures: a walkable doorway with an event and a blocked
+stair trigger confirmed to activate from an approach cell. Verify graphic
+placement, door collision, arrival/exit reachability, and actual activation
+separately, including unchanged event coordinates and commands. Default-blocked
+imported graphics are input data requiring review, not an MCP serialization bug.
 
 `validate_connectivity` currently checks the inter-map transfer graph and bounds,
 not walkable cell containment or stair geometry. The `render_map` passability
