@@ -10,6 +10,36 @@ criteria below also describe boundaries that tools must report rather than infer
 | Reviewed imports | `review_tileset_import` | Explicit evidence, source inventory/coverage, masks and bands, duplicate checks, escaped index, contact sheets and reconstruction; [manifest and limits](docs/ASSET-REVIEW.md) |
 | Character sheets | `inspect_character_sheet`, `validate_character_set` | Explicit layouts, frame alpha/bounds/anchors, reviewed conversion/extraction and role-set comparison; [specification](docs/ASSET-REVIEW.md#character-inspection-and-conversion) |
 
+## Proposed: Essentials plugin dependency and compilation diagnostics
+
+Status: proposed, not implemented. Keep this optional, read-only diagnostic in
+the Essentials-specific layer, separate from the standard XP database tools.
+
+- Inventory bounded `Plugins/*/meta.txt` files and report declared `Name`,
+  `Version`, `Requires`, `Optional`, `Conflicts` and `Disabled` values. Verify
+  supported syntax against the relevant Essentials version before implementation;
+  report malformed or unsupported declarations without guessing their meaning.
+- Compare declared dependencies and version requirements with discovered external
+  plugins. Distinguish integrated scripts where evidence is available; an absent
+  plugin folder alone must not classify an integrated dependency as missing.
+  Unverified integrated dependencies remain unknown.
+- Report evidence of pending compilation separately from dependency problems.
+  A reported reproduction has newly added plugin folders alongside an older empty
+  compiled cache, with a non-DEBUG runtime using that cache. Validate this behavior
+  against the supported PluginManager version before asserting it as a rule.
+  Cache existence or timestamps alone do not prove freshness or effective loading;
+  explicitly report cases where static inspection cannot establish runtime state.
+- Never execute Ruby, compile plugins or alter PBS, caches or other project files.
+  Confine reads to the project, reject unsafe paths, bound file counts and sizes,
+  and treat metadata as untrusted text. Diagnostics must state their version and
+  detection limits.
+
+Acceptance tests must use synthetic projects: minimum-version requirements,
+optional and conflicting dependencies, disabled plugins, accented metadata,
+new folders with a previously empty cache, unknown integrated dependencies and
+malformed or oversized metadata. Assert byte-for-byte unchanged project files
+and no writes or Ruby execution. Do not include private game data in fixtures.
+
 ### Boundaries and remaining work
 
 - Source identity, grid scale and region semantics require caller review. Hashes
